@@ -1,25 +1,12 @@
-/**
- * Teste de Tool Calls em Ambiente Real
- * 
- * Este script testa o proxy com streaming real usando tool calls
- * Verifica:
- * 1. Texto aparece progressivamente (streaming real)
- * 2. Tool calls não são duplicadas
- * 3. Arguments são JSON válido completo
- * 4. Sem campos undefined
- * 
- * Uso: node scripts/test-streaming-tool-calls.js
- */
+
 
 const http = require('http');
 const readline = require('readline');
 
-// Configurações
 const PROXY_URL = process.env.PROXY_URL || 'http://localhost:3000';
 const API_KEY = process.env.PROXY_API_KEY || process.env.TEST_API_KEY || 'test-key';
 const MODEL = process.env.TEST_MODEL || 'moonshotai/kimi-k2.5';
 
-// Cores para output
 const colors = {
   reset: '\x1b[0m',
   green: '\x1b[32m',
@@ -33,9 +20,6 @@ function log(message, color = 'reset') {
   console.log(`${colors[color]}${message}${colors.reset}`);
 }
 
-/**
- * Testa streaming com tool calls
- */
 async function testStreamingWithToolCalls() {
   log('\n🧪 Testando Streaming com Tool Calls\n', 'cyan');
   log('='.repeat(60), 'cyan');
@@ -151,13 +135,13 @@ async function testStreamingWithToolCalls() {
             receivedText += delta.content;
             process.stdout.write(colors.cyan + delta.content + colors.reset);
             
-            // Streaming real: texto deve vir em múltiplos chunks
+            
             if (textChunks > 1) {
               testResults.textStreaming = true;
             }
           }
 
-          // Acumula fragments de tool calls
+          
           if (delta?.tool_calls) {
             toolCallFragments.push({
               timestamp: Date.now(),
@@ -180,12 +164,12 @@ async function testStreamingWithToolCalls() {
                 receivedToolCalls[idx].fragments.push(tc.function.arguments);
               }
 
-              // Atualiza nome se vier
+              
               if (tc.function?.name) {
                 receivedToolCalls[idx].name = tc.function.name;
               }
 
-              // Atualiza ID se vier
+              
               if (tc.id) {
                 receivedToolCalls[idx].id = tc.id;
               }
@@ -197,7 +181,7 @@ async function testStreamingWithToolCalls() {
             log('\n\n📦 Tool Calls recebidas!\n', 'green');
             testResults.toolCallsReceived = true;
 
-            // Verifica se arguments são válidos
+            
             receivedToolCalls.forEach((tc, idx) => {
               log(`\n🔧 Tool Call ${idx + 1}:`, 'yellow');
               log(`   ID: ${tc.id}`, 'reset');
@@ -217,10 +201,10 @@ async function testStreamingWithToolCalls() {
                   log(`   ❌ Contém undefined`, 'red');
                 }
 
-                // Verifica duplicação
+                
                 const totalFragments = tc.fragments.join('');
                 if (tc.arguments !== totalFragments) {
-                  // Pode ser que o último fragmento seja o completo
+                  
                   if (!totalFragments.includes(tc.arguments)) {
                     testResults.noDuplication = false;
                     testResults.errors.push(`Tool call ${idx} pode estar duplicada`);
@@ -305,9 +289,6 @@ async function testStreamingWithToolCalls() {
   });
 }
 
-/**
- * Verifica se o proxy está rodando
- */
 async function checkProxy() {
   return new Promise((resolve) => {
     const url = new URL(PROXY_URL);

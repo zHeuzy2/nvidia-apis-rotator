@@ -1,7 +1,4 @@
-/**
- * Serviço de Métricas
- * Rastreia tokens, uso de API, performance e estatísticas detalhadas
- */
+
 
 const apiConfig = require('../config/apiConfig');
 
@@ -23,9 +20,7 @@ class MetricsService {
     this.maxHistorySize = 5000;
   }
 
-  /**
-   * Registra uma requisição completa
-   */
+  
   recordRequest(data) {
     const {
       apiId,
@@ -41,13 +36,13 @@ class MetricsService {
     const now = new Date();
     const hourKey = now.toISOString().slice(0, 13); // YYYY-MM-DDTHH
 
-    // Atualiza métricas globais
+    
     this.globalMetrics.totalRequests++;
     this.globalMetrics.totalTokensInput += inputTokens;
     this.globalMetrics.totalTokensOutput += outputTokens;
     this.globalMetrics.totalTokens += inputTokens + outputTokens;
 
-    // Atualiza métricas por modelo
+    
     if (model) {
       if (!this.globalMetrics.requestsPerModel[model]) {
         this.globalMetrics.requestsPerModel[model] = 0;
@@ -59,13 +54,13 @@ class MetricsService {
       this.globalMetrics.tokensPerModel[model].total += inputTokens + outputTokens;
     }
 
-    // Atualiza requisições por hora
+    
     if (!this.globalMetrics.requestsPerHour[hourKey]) {
       this.globalMetrics.requestsPerHour[hourKey] = 0;
     }
     this.globalMetrics.requestsPerHour[hourKey]++;
 
-    // Atualiza média de tempo de resposta
+    
     if (success && responseTime > 0) {
       const totalSuccess = this.globalMetrics.totalRequests - this.globalMetrics.errorsCount;
       this.globalMetrics.averageResponseTime = 
@@ -77,7 +72,7 @@ class MetricsService {
       this.globalMetrics.errorsCount++;
     }
 
-    // Adiciona ao histórico
+    
     this.globalMetrics.requestHistory.push({
       requestId,
       timestamp: now.toISOString(),
@@ -91,15 +86,15 @@ class MetricsService {
       error: error ? (error.message || error) : null
     });
 
-    // Limpa histórico antigo
+    
     if (this.globalMetrics.requestHistory.length > this.maxHistorySize) {
       this.globalMetrics.requestHistory = this.globalMetrics.requestHistory.slice(-this.maxHistorySize);
     }
 
-    // Limpa dados de horas antigas (mantém últimas 168 horas = 7 dias)
+    
     this.cleanOldHourlyData();
 
-    // Atualiza métricas da API específica
+    
     if (apiId) {
       apiConfig.recordTokens(apiId, inputTokens, outputTokens);
       if (success) {
@@ -110,12 +105,10 @@ class MetricsService {
     }
   }
 
-  /**
-   * Extrai informações de tokens da resposta NVIDIA
-   */
+  
   extractTokensFromResponse(response) {
     try {
-      // Formato padrão da NVIDIA NIM API
+      
       if (response?.usage) {
         return {
           inputTokens: response.usage.prompt_tokens || 0,
@@ -129,9 +122,7 @@ class MetricsService {
     }
   }
 
-  /**
-   * Remove dados de horas antigas
-   */
+  
   cleanOldHourlyData() {
     const hoursToKeep = 168; // 7 dias
     const keys = Object.keys(this.globalMetrics.requestsPerHour).sort();
@@ -143,9 +134,7 @@ class MetricsService {
     }
   }
 
-  /**
-   * Retorna resumo das métricas globais
-   */
+  
   getGlobalSummary() {
     const apiStats = apiConfig.getGlobalStats();
     const uptime = this.getUptime();
@@ -168,9 +157,7 @@ class MetricsService {
     };
   }
 
-  /**
-   * Retorna métricas detalhadas
-   */
+  
   getDetailedMetrics() {
     return {
       global: this.getGlobalSummary(),
@@ -181,9 +168,7 @@ class MetricsService {
     };
   }
 
-  /**
-   * Retorna tendência por hora (últimas 24 horas)
-   */
+  
   getHourlyTrend() {
     const now = new Date();
     const trend = [];
@@ -201,9 +186,7 @@ class MetricsService {
     return trend;
   }
 
-  /**
-   * Retorna histórico de requisições
-   */
+  
   getRequestHistory(limit = 100, offset = 0) {
     const history = this.globalMetrics.requestHistory.slice().reverse();
     return {
@@ -214,9 +197,7 @@ class MetricsService {
     };
   }
 
-  /**
-   * Retorna uptime do serviço
-   */
+  
   getUptime() {
     const start = new Date(this.globalMetrics.startTime);
     const now = new Date();
@@ -237,9 +218,7 @@ class MetricsService {
     };
   }
 
-  /**
-   * Reseta todas as métricas
-   */
+  
   resetMetrics() {
     this.globalMetrics = {
       startTime: new Date().toISOString(),
@@ -256,9 +235,7 @@ class MetricsService {
     };
   }
 
-  /**
-   * Exporta métricas para JSON
-   */
+  
   exportMetrics() {
     return {
       exportedAt: new Date().toISOString(),

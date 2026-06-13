@@ -1,13 +1,4 @@
-/**
- * Serviço de Proxy
- * Faz requisições para a NVIDIA NIM API
- * 
- * v3.0 - Migrado de axios para undici (HTTP/2 nativo, mais rápido)
- * - Pool de conexões por API (evita que APIs lentas congestionem as rápidas)
- * - Streaming otimizado com undici
- * - DNS caching via cacheable-lookup
- * - TLS session cache
- */
+
 
 const { Pool } = require('undici');
 const dns = require('dns');
@@ -22,7 +13,7 @@ const logger = require('../utils/asyncLogger');
 const { parseKimiToolCalls, hasKimiToolCalls, removeKimiTokens } = require('../utils/streamingUtils');
 
 // ============================================
-// DNS CACHING - Reduz latência em ~50-100ms
+
 // ============================================
 let cacheableLookup = null;
 try {
@@ -41,17 +32,14 @@ dns.setDefaultResultOrder('ipv4first');
 
 // ============================================
 // PER-API CONNECTION POOLS (undici)
-// Cada API tem seu próprio pool para evitar
-// que APIs lentas consumam sockets das rápidas.
+
 // ============================================
 class ApiPoolManager {
   constructor() {
     this.pools = new Map();  // apiId → Pool
   }
 
-  /**
-   * Retorna (ou cria) um pool para uma API específica
-   */
+  
   getPool(api) {
     if (this.pools.has(api.id)) {
       return this.pools.get(api.id);
@@ -59,24 +47,24 @@ class ApiPoolManager {
 
     const url = new URL(api.baseUrl);
     
-    // Configuração de pool otimizada
+    
     const poolOptions = {
-      connections: 16,              // Máximo de conexões por API
+      connections: 16,              
       pipelining: 1,
-      allowH2: false,               // Desabilita HTTP/2 multiplexing para evitar bugs de timeout e instabilidade
+      allowH2: false,               
       keepAliveTimeout: 10000,      // 10s keep-alive
-      keepAliveMaxTimeout: 30000,   // 30s máximo
-      bodyTimeout: 0,               // Desabilita timeout de body global (controlado por request signal)
-      headersTimeout: 30000,        // Aumenta timeout de headers para 30s (TTFB longo de LLMs)
-      connectTimeout: 10000,        // Timeout de conexão (10s)
+      keepAliveMaxTimeout: 30000,   
+      bodyTimeout: 0,               
+      headersTimeout: 30000,        
+      connectTimeout: 10000,        
     };
 
-    // Instala DNS cache no pool se disponível
+    
     if (cacheableLookup) {
       try {
         cacheableLookup.install(poolOptions);
       } catch (e) {
-        // Ignora se não suportar (undici 5.x vs 6.x)
+        
       }
     }
 
@@ -85,9 +73,7 @@ class ApiPoolManager {
     return pool;
   }
 
-  /**
-   * Destrói o pool de uma API específica
-   */
+  
   destroyPool(apiId) {
     const pool = this.pools.get(apiId);
     if (pool) {
@@ -96,9 +82,7 @@ class ApiPoolManager {
     }
   }
 
-  /**
-   * Destrói todos os pools
-   */
+  
   destroyAll() {
     for (const [id, pool] of this.pools) {
       try { pool.destroy(); } catch (e) { /* ignore */ }
@@ -107,12 +91,10 @@ class ApiPoolManager {
   }
 }
 
-// Instância global do pool manager
 const poolManager = new ApiPoolManager();
 
 // ============================================
-// HELPER: Normaliza erros do undici para
-// compatibilidade com o formato antigo do axios
+
 // ============================================
 function normalizeUndiciError(error) {
   if (!error) {
@@ -127,7 +109,7 @@ function normalizeUndiciError(error) {
     response: null,
   };
 
-  // undici expõe statusCode no erro quando a resposta foi recebida
+  
   if (error.statusCode) {
     let errorData = null;
     if (error.body) {
@@ -147,7 +129,7 @@ function normalizeUndiciError(error) {
 }
 
 // ============================================
-// HELPER: Lê o body de uma resposta undici
+
 // ============================================
 async function readResponseBody(response) {
   try {
@@ -168,7 +150,7 @@ class ProxyService {
     this.retryDelay = 1000;
     this.maxRetryDelay = 5000;
 
-    // Timeout por modelo (adaptativo)
+    
     this.modelTimeouts = {
       'moonshotai/kimi-k2.6': { base: 15000, perToken: 8 },
       'deepseek-ai/deepseek-v4-pro': { base: 30000, perToken: 10 },
@@ -178,9 +160,7 @@ class ProxyService {
     };
   }
 
-  /**
-   * Calcula timeout adaptativo baseado no modelo e max_tokens
-   */
+  
   calculateTimeout(body) {
     const model = body?.model || 'default';
     const config = this.modelTimeouts[model] || this.modelTimeouts.default;
@@ -188,9 +168,7 @@ class ProxyService {
     return Math.min(300000, config.base + (maxTokens * config.perToken));
   }
 
-  /**
-   * Calcula backoff exponencial com jitter
-   */
+  
   calculateBackoff(attempt) {
     const base = this.retryDelay;
     const max = this.maxRetryDelay;
@@ -199,9 +177,7 @@ class ProxyService {
     return exponential + jitter;
   }
 
-  /**
-   * Normaliza tool calls de formatos proprietários para formato OpenAI padrão
-   */
+  
   normalizeToolCalls(toolCalls, requestId) {
     if (!Array.isArray(toolCalls)) return toolCalls;
     
@@ -260,9 +236,7 @@ class ProxyService {
     return normalized;
   }
 
-  /**
-   * Processa mensagens multimodais para garantir compatibilidade com a API
-   */
+  
   processMultimodalMessages(messages) {
     if (!Array.isArray(messages)) return messages;
 
@@ -295,11 +269,7 @@ class ProxyService {
     });
   }
 
-  /**
-   * Faz proxy de uma requisição para a NVIDIA API
-   * 
-   * v3.0: Migrado para undici com pool por API
-   */
+  
   async proxyRequest(endpoint, method, body, headers = {}) {
     const requestId = uuidv4();
     const startTime = Date.now();
@@ -321,15 +291,15 @@ class ProxyService {
         };
         delete requestHeaders['authorization'];
 
-        // Usa pool dedicado para esta API
+        
         const pool = poolManager.getPool(api);
 
-        // Constrói o path completo (baseUrl pode ter path como /v1)
+        
         const baseUrlObj = new URL(api.baseUrl);
         const basePath = baseUrlObj.pathname.replace(/\/$/, ''); // ex: '/v1'
         const fullPath = basePath + endpoint; // ex: '/v1/chat/completions'
 
-        // Faz a requisição com undici
+        
         const response = await pool.request({
           method: method.toUpperCase(),
           path: fullPath,
@@ -338,11 +308,11 @@ class ProxyService {
           signal: AbortSignal.timeout(timeout),
         });
 
-        // v3.1: undici retorna 429 como resposta normal (não erro)
-        // Precisamos tratar aqui e retry com outra API
+        
+        
         if (response.statusCode === 429) {
           logger.info(`[${requestId}] Rate limit (429) em ${api.id}, tentando próxima API...`);
-          // Consome o body pra liberar a conexão
+          
           try { await response.body.text(); } catch {}
           if (usedApi) rotatorService.recordFailure(usedApi.id);
           continue;
@@ -350,17 +320,17 @@ class ProxyService {
 
         const responseTime = Date.now() - startTime;
 
-        // Lê o body da resposta
+        
         const responseData = await readResponseBody(response);
 
-        // Registra latência e sucesso
+        
         rotatorService.recordLatency(api.id, responseTime);
         rotatorService.recordSuccess(api.id);
 
-        // Extrai tokens da resposta
+        
         const tokens = metricsService.extractTokensFromResponse(responseData);
 
-        // Registra métricas
+        
         metricsService.recordRequest({
           requestId,
           apiId: api.id,
@@ -373,7 +343,7 @@ class ProxyService {
         });
 
         // ============================================
-        // Compatibilidade total com OpenAI/Vercel AI SDK
+        
         // ============================================
         if (responseData && typeof responseData === 'object') {
           responseData.id = (typeof responseData.id === 'string' && responseData.id.length > 0)
@@ -466,11 +436,11 @@ class ProxyService {
                 }
 
                 // ============================================
-                // NOTA: NÃO copiamos reasoning → content mais.
-                // O cliente já sabe lidar com
-                // reasoning_content separado do content.
-                // Isso evitava que o content ficasse vazio
-                // para o MiniMax M2.7, mas contaminava o output.
+                
+                
+                
+                
+                
                 // ============================================
               }
 
@@ -511,13 +481,13 @@ class ProxyService {
         const normalized = normalizeUndiciError(error);
         const errMsg = (error && error.message) ? error.message : String(error);
 
-        // Rate limit → próxima API imediatamente
+        
         if (normalized.response?.status === 429) {
           logger.info(`[${requestId}] Rate limit atingido em ${usedApi?.id || '?'}, tentando próxima API...`);
           continue;
         }
 
-        // Registra falha no circuit breaker
+        
         try {
           if (usedApi) {
             rotatorService.recordFailure(usedApi.id);
@@ -536,18 +506,18 @@ class ProxyService {
           console.error(`[${requestId}] Erro interno ao registrar falha:`, innerErr.message);
         }
 
-        // Erro de servidor (5xx) → retry com backoff
+        
         if (normalized.response?.status && normalized.response.status >= 500) {
           logger.warn(`[${requestId}] Erro de servidor (${normalized.response.status}), tentativa ${attempts}/${this.maxRetries}`);
           await this.sleep(this.calculateBackoff(attempts));
           continue;
         }
 
-        // Erro de cliente (4xx, exceto 429) → retorna imediatamente
-        // EXCETO 404: pode ser que a API key específica não tenha o modelo → tenta próxima
+        
+        
         if (normalized.response?.status && normalized.response.status >= 400 && normalized.response.status < 500) {
           if (normalized.response.status === 404) {
-            // Tenta próxima API (pode ter o modelo em outra key)
+            
             logger.warn(`[${requestId}] Modelo não encontrado na API ${usedApi?.id}, tentando próxima...`);
             continue;
           }
@@ -571,7 +541,7 @@ class ProxyService {
           };
         }
 
-        // Timeout ou erro de rede → retry com backoff
+        
         logger.warn(`[${requestId}] Erro (${error?.code || 'UNKNOWN'}): ${errMsg}, tentativa ${attempts}/${this.maxRetries}`);
         await this.sleep(this.calculateBackoff(attempts));
       }
@@ -598,9 +568,7 @@ class ProxyService {
     };
   }
 
-  /**
-   * Proxy para chat completions
-   */
+  
   async chatCompletions(body, headers = {}) {
     const validation = modelValidationService.validateRequest(body);
 
@@ -613,7 +581,7 @@ class ProxyService {
 
     const validatedBody = validation.validatedBody;
 
-    // Auto-bump max_tokens para modelos thinking
+    
     const modelInfo = modelsConfig.getModel(validatedBody.model);
     if (modelInfo?.recommendedMinTokens && (!validatedBody.max_tokens || validatedBody.max_tokens < modelInfo.recommendedMinTokens)) {
       const original = validatedBody.max_tokens || 0;
@@ -642,30 +610,22 @@ class ProxyService {
     return result;
   }
 
-  /**
-   * Proxy para completions (legacy)
-   */
+  
   async completions(body, headers = {}) {
     return this.proxyRequest('/completions', 'POST', body, headers);
   }
 
-  /**
-   * Proxy para embeddings
-   */
+  
   async embeddings(body, headers = {}) {
     return this.proxyRequest('/embeddings', 'POST', body, headers);
   }
 
-  /**
-   * Proxy genérico para qualquer endpoint
-   */
+  
   async genericProxy(endpoint, method, body, headers = {}) {
     return this.proxyRequest(endpoint, method, body, headers);
   }
 
-  /**
-   * Faz requisição com streaming (undici nativo)
-   */
+  
   async proxyStreamRequest(endpoint, method, body, headers = {}, onData, excludeApis = []) {
     const requestId = uuidv4();
     const startTime = Date.now();
@@ -699,10 +659,10 @@ class ProxyService {
           path: fullPath,
           headers: requestHeaders,
           body: JSON.stringify({ ...body, stream: true }),
-          signal: AbortSignal.timeout(300000), // 5 min max para streaming
+          signal: AbortSignal.timeout(300000), 
         });
 
-        // 429 (Rate Limit) ou 404 (Modelo indisponível na chave) -> Tenta próxima key
+        
         if (response.statusCode === 429 || response.statusCode === 404) {
           logger.info(`[Streaming] Status ${response.statusCode} em ${api.id}, tentando próxima API...`);
           try { await response.body.text(); } catch {}
@@ -712,7 +672,7 @@ class ProxyService {
           continue;
         }
 
-        // Erros HTTP (ex: 500, 503, 401) -> Tenta próxima key
+        
         if (response.statusCode >= 400) {
           const bodyText = await response.body.text();
           logger.warn(`[Streaming] Erro HTTP ${response.statusCode} em ${api.id}: ${bodyText.substring(0, 200)}`);
@@ -722,7 +682,7 @@ class ProxyService {
           continue;
         }
 
-        // Sucesso
+        
         const stream = response.body;
         const finalApiId = api.id;
         const finalApiStartTime = apiStartTime;
@@ -777,9 +737,7 @@ class ProxyService {
     throw new Error(`Todas as ${this.maxRetries} chaves de API falharam ao iniciar o stream. Último erro: ${lastError ? lastError.message : 'desconhecido'}`);
   }
 
-  /**
-   * Helper para sleep
-   */
+  
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }

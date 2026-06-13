@@ -1,37 +1,18 @@
 #!/usr/bin/env node
 
-/**
- * Benchmark Script para NVIDIA API Rotator
- * 
- * Testa:
- * - Latência inicial (TTFT - Time to First Token)
- * - Throughput de streaming
- * - Cache hit/miss
- * - Throughput total
- * - Conexões paralelas
- * 
- * Uso:
- *   node scripts/benchmark.js [url] [options]
- * 
- * Exemplos:
- *   node scripts/benchmark.js http://localhost:3000
- *   node scripts/benchmark.js http://localhost:3000 --requests 20
- *   node scripts/benchmark.js http://localhost:3000 --streaming
- */
-
 const http = require('http');
 const https = require('https');
 
 // ============================================
-// PARSING DE ARGUMENTOS (corrigido)
+
 // ============================================
 function parseArgs() {
   const args = process.argv.slice(2);
   
-  // Encontra a URL (argumento que começa com http:// ou https://)
+  
   const urlArg = args.find(a => a.startsWith('http://') || a.startsWith('https://'));
   
-  // Encontra valores de opções
+  
   const getOption = (name, defaultValue) => {
     const arg = args.find(a => a.startsWith(`--${name}=`));
     return arg ? arg.split('=')[1] : defaultValue;
@@ -50,7 +31,6 @@ function parseArgs() {
 
 const config = parseArgs();
 
-// Cores para output
 const colors = {
   reset: '\x1b[0m',
   bright: '\x1b[1m',
@@ -130,7 +110,7 @@ async function makeRequest(endpoint, body, stream = false) {
         responseData += chunk.toString();
         bytesReceived += chunk.length;
 
-        // Conta tokens em streaming
+        
         if (stream) {
           const lines = chunk.toString().split('\n');
           for (const line of lines) {
@@ -151,7 +131,7 @@ async function makeRequest(endpoint, body, stream = false) {
         const totalTime = endTime - startTime;
         const ttft = firstByteTime ? firstByteTime - startTime : totalTime;
 
-        // Extrai tokens da resposta não-streaming
+        
         if (!stream) {
           try {
             const json = JSON.parse(responseData);
@@ -224,7 +204,7 @@ async function testLatency() {
     }
   }
 
-  // Estatísticas
+  
   const successful = results.filter(r => r.success);
   if (successful.length > 0) {
     const ttfts = successful.map(r => r.ttft);
@@ -279,7 +259,7 @@ async function testStreaming() {
     }
   }
 
-  // Estatísticas
+  
   const successful = results.filter(r => r.success);
   if (successful.length > 0) {
     const ttfts = successful.map(r => r.ttft);
@@ -307,7 +287,7 @@ async function testCache() {
   console.log(`\n  Prompt: "${prompt}"`);
   console.log(`  Temperature: 0 (para habilitar cache)\n`);
 
-  // Primeira requisição (cache miss)
+  
   console.log('  1. Primeira requisição (cache miss esperado)...');
   const first = await makeRequest('/v1/chat/completions', {
     model: config.model,
@@ -322,7 +302,7 @@ async function testCache() {
     console.log(c('red', `     → Erro: ${first.error || first.statusCode}`));
   }
 
-  // Segunda requisição (cache hit esperado)
+  
   console.log('\n  2. Segunda requisição (cache hit esperado)...');
   const second = await makeRequest('/v1/chat/completions', {
     model: config.model,
@@ -337,7 +317,7 @@ async function testCache() {
     console.log(c('red', `     → Erro: ${second.error || second.statusCode}`));
   }
 
-  // Terceira requisição diferente (cache miss)
+  
   console.log('\n  3. Requisição diferente (cache miss esperado)...');
   const third = await makeRequest('/v1/chat/completions', {
     model: config.model,
@@ -488,7 +468,7 @@ async function main() {
   console.log(`  Requests: ${config.requests}`);
   console.log(`  Parallelismo: ${config.parallel}`);
 
-  // Testa conexão primeiro
+  
   await testHealth();
 
   // Roda os benchmarks

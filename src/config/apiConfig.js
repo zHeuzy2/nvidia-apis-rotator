@@ -1,7 +1,4 @@
-/**
- * Configuração das APIs NVIDIA NIM
- * Cada conta tem limite de 40 RPM (requests per minute)
- */
+
 
 class ApiConfig {
   constructor() {
@@ -13,16 +10,12 @@ class ApiConfig {
     this.startCleanupScheduler();
   }
 
-  /**
-   * Registra um listener que será notificado quando uma API mudar
-   */
+  
   addChangeListener(listener) {
     this.changeListeners.push(listener);
   }
 
-  /**
-   * Notifica todos os listeners sobre uma mudança na API
-   */
+  
   notifyChange() {
     for (const listener of this.changeListeners) {
       try {
@@ -53,7 +46,7 @@ class ApiConfig {
   }
 
   loadFromEnvironment() {
-    // Carrega APIs das variáveis de ambiente
+    
     // Formato: NVIDIA_API_KEY_1, NVIDIA_API_KEY_2, etc.
     let index = 1;
     while (process.env[`NVIDIA_API_KEY_${index}`]) {
@@ -66,7 +59,7 @@ class ApiConfig {
         name: name,
         baseUrl: baseUrl,
         apiKey: apiKey,
-        rateLimit: 40, // 40 RPM por conta
+        rateLimit: 40, 
         currentRequests: 0,
         requestWindow: new Array(0), // Pre-allocated array for better performance
         healthy: true,
@@ -88,7 +81,7 @@ class ApiConfig {
       index++;
     }
 
-    // Se não houver APIs configuradas via env, usa configuração padrão de exemplo
+    
     if (this.apis.size === 0) {
       console.warn('⚠️  Nenhuma API NVIDIA configurada. Configure as variáveis de ambiente NVIDIA_API_KEY_*');
     }
@@ -143,7 +136,7 @@ class ApiConfig {
     }
   }
 
-  // Verifica se a API pode fazer mais requisições (dentro do limite de 40 RPM)
+  
   canMakeRequest(id) {
     const api = this.apis.get(id);
     if (!api || !api.enabled || !api.healthy) return false;
@@ -166,7 +159,7 @@ class ApiConfig {
     return api.requestWindow.length < api.rateLimit;
   }
 
-  // Registra uma nova requisição
+  
   recordRequest(id) {
     const api = this.apis.get(id);
     if (api) {
@@ -176,7 +169,7 @@ class ApiConfig {
     }
   }
 
-  // Registra tokens usados
+  
   recordTokens(id, inputTokens, outputTokens) {
     const api = this.apis.get(id);
     if (api) {
@@ -186,12 +179,12 @@ class ApiConfig {
     }
   }
 
-  // Registra sucesso/falha
+  
   recordSuccess(id, responseTime) {
     const api = this.apis.get(id);
     if (api) {
       api.metrics.successfulRequests++;
-      // Atualiza média de tempo de resposta
+      
       const totalSuccess = api.metrics.successfulRequests;
       api.metrics.averageResponseTime = 
         ((api.metrics.averageResponseTime * (totalSuccess - 1)) + responseTime) / totalSuccess;
@@ -206,14 +199,14 @@ class ApiConfig {
         timestamp: new Date().toISOString(),
         error: (error && error.message) ? error.message : (error || 'Erro desconhecido')
       });
-      // Mantém apenas os últimos 100 erros
+      
       if (api.metrics.errors.length > 100) {
         api.metrics.errors = api.metrics.errors.slice(-100);
       }
     }
   }
 
-  // Retorna estatísticas gerais
+  
   getGlobalStats() {
     const apis = this.getAllApis();
     return {
@@ -229,7 +222,7 @@ class ApiConfig {
     };
   }
 
-  // Retorna métricas detalhadas por API
+  
   getDetailedMetrics() {
     return this.getAllApis().map(api => ({
       id: api.id,

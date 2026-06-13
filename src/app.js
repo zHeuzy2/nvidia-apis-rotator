@@ -1,7 +1,4 @@
-/**
- * NVIDIA API Rotator
- * Proxy local para NVIDIA NIM API (OpenAI-compatible)
- */
+
 
 require('dotenv').config();
 
@@ -20,8 +17,6 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(requestLogger);
-
-// ==================== Rotas ====================
 
 app.get('/', (req, res) => {
   const apis = apiConfig.getHealthyApis();
@@ -61,8 +56,6 @@ app.use((req, res) => {
     error: { message: 'Endpoint não encontrado', path: req.path }
   });
 });
-
-// ==================== Inicialização ====================
 
 app.listen(PORT, () => {
   console.log('========================================');

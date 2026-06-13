@@ -1,20 +1,11 @@
-/**
- * Configuração dos Modelos NVIDIA NIM para Coding
- * 
- * v3.2 - 5 modelos principais
- * - moonshotai/kimi-k2.6 (default) — 256K context, 32K output, vision, agent swarm
- * - deepseek-ai/deepseek-v4-pro — 1M context, reasoning avançado
- * - z-ai/glm-5.1 — 512K context, thinking interleaved
- * - minimaxai/minimax-m2.7 — 256K context, coding SOTA
- * - minimaxai/minimax-m3 — 1M context, multimodal MoE SOTA
- */
+
 
 const modelsConfig = {
-  // Modelo padrão
+  
   defaultModel: process.env.DEFAULT_MODEL || 'moonshotai/kimi-k2.6',
 
-  // System prompts NÃO são mais injetados — o cliente gerencia os seus.
-  // Mantido apenas para referência histórica.
+  
+  
   systemPrompts: {},
 
   models: {
@@ -28,8 +19,8 @@ const modelsConfig = {
       isMoE: true,
       totalParams: 1000000000000,
       activeParams: 32000000000,
-      contextWindow: 262144,        // 256K tokens
-      maxOutputTokens: 32768,       // 32K tokens
+      contextWindow: 262144,        
+      maxOutputTokens: 32768,       
       defaultTemperature: 1.0,
       instantTemperature: 0.6,
       defaultTopP: 0.95,
@@ -73,17 +64,17 @@ const modelsConfig = {
     },
 
     // ============================================
-    // DeepSeek V4 Pro — 1M tokens context
+    
     // ============================================
     'deepseek-ai/deepseek-v4-pro': {
       id: 'deepseek-ai/deepseek-v4-pro',
       name: 'DeepSeek V4 Pro',
       ownedBy: 'deepseek-ai',
       isMoE: true,
-      totalParams: 685000000000,    // ~685B (estimado, baseado na família DeepSeek)
-      activeParams: 37000000000,    // ~37B ativos (MoE)
-      contextWindow: 1048576,       // 1M tokens
-      maxOutputTokens: 65536,       // 64K tokens (estimado)
+      totalParams: 685000000000,    
+      activeParams: 37000000000,    
+      contextWindow: 1048576,       
+      maxOutputTokens: 65536,       
       defaultTemperature: 0.7,
       temperatureRange: { min: 0, max: 1 },
       supportsThinking: true,
@@ -109,9 +100,9 @@ const modelsConfig = {
       name: 'GLM-5.1',
       ownedBy: 'z-ai',
       isMoE: false,
-      totalParams: 500000000000,    // ~500B (estimado, baseado no GLM-5)
-      contextWindow: 524288,        // 512K tokens (baseado no GLM-5)
-      maxOutputTokens: 131072,      // 128K tokens
+      totalParams: 500000000000,    
+      contextWindow: 524288,        
+      maxOutputTokens: 131072,      
       defaultTemperature: 0.7,
       temperatureRange: { min: 0, max: 1 },
       supportsThinking: true,
@@ -133,26 +124,26 @@ const modelsConfig = {
       name: 'MiniMax M2.7',
       ownedBy: 'minimaxai',
       isMoE: true,
-      totalParams: 230000000000,    // ~230B (estimado, baseado no M2.5)
-      contextWindow: 262144,        // 256K tokens
-      maxOutputTokens: 131072,      // 128K tokens
+      totalParams: 230000000000,    
+      contextWindow: 262144,        
+      maxOutputTokens: 131072,      
       defaultTemperature: 0.7,
       temperatureRange: { min: 0, max: 1 },
       supportsThinking: true,
-      supportsInstantMode: false,   // MiniMax não suporta desabilitar thinking
+      supportsInstantMode: false,   
       supportsVision: false,
       supportsTools: true,
       thinkingFormat: 'interleaved',
       thinkingField: 'reasoning_content',
       thinkingTags: { open: '<think>', close: '</think>' },
       preserveThinking: true,
-      // MiniMax M2.7 thinking mode — SEMPRE ativo, não desabilitável
+      
       thinkingConfig: {
         enabledType: 'enabled',
         budgetTokensParam: 'budget_tokens'
       },
-      // MiniMax M2.7 gasta muitos tokens em thinking.
-      // Recomendação: usar pelo menos 200-500 max_tokens para ter output visível
+      
+      
       recommendedMinTokens: 200,
       description: 'MiniMax M2.7 — 256K context, 128K output. MoE agentic coding. Thinking interleaved (sempre ativo). Use max_tokens >= 200.'
     },
@@ -172,7 +163,7 @@ const modelsConfig = {
       defaultTemperature: 0.7,
       temperatureRange: { min: 0, max: 1 },
       supportsThinking: true,
-      supportsInstantMode: false,   // Thinking interleaved sempre ativo
+      supportsInstantMode: false,   
       supportsVision: true,
       supportsTools: true,
       thinkingFormat: 'interleaved',
@@ -226,9 +217,7 @@ const modelsConfig = {
     'm3': 'minimaxai/minimax-m3',
   },
 
-  /**
-   * Retorna a configuração de um modelo pelo ID ou alias
-   */
+  
   getModel(modelId) {
     if (!modelId) return null;
     if (this.models[modelId]) return this.models[modelId];
@@ -237,9 +226,7 @@ const modelsConfig = {
     return null;
   },
 
-  /**
-   * Resolve um nome de modelo para o ID completo
-   */
+  
   resolveModelId(modelId) {
     if (!modelId) return this.defaultModel;
     if (this.models[modelId]) return modelId;
@@ -248,16 +235,12 @@ const modelsConfig = {
     return modelId;
   },
 
-  /**
-   * Retorna lista de todos os modelos suportados
-   */
+  
   getAllModels() {
     return Object.values(this.models);
   },
 
-  /**
-   * Retorna lista de modelos no formato OpenAI /models
-   */
+  
   getModelsListResponse() {
     const models = this.getAllModels().map(model => ({
       id: model.id,
@@ -275,16 +258,12 @@ const modelsConfig = {
     };
   },
 
-  /**
-   * Verifica se um modelo é conhecido/suportado
-   */
+  
   isKnownModel(modelId) {
     return this.getModel(modelId) !== null;
   },
 
-  /**
-   * Retorna o system prompt para um modelo
-   */
+  
   getSystemPrompt(modelId) {
     const resolvedId = this.resolveModelId(modelId);
     return this.systemPrompts[resolvedId] || null;

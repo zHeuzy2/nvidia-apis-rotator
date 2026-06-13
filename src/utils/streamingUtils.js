@@ -1,44 +1,20 @@
-/**
- * Utilitários para Streaming
- * 
- * Converte respostas entre formatos e gerencia tool calls em streaming
- * 
- * FIXES v5.0:
- * - Tratamento de JSON duplicado no buffer
- * - Parsing de tool calls do Kimi (tokens técnicos)
- * - Logs resumidos (sem dados sensíveis)
- * - Remoção de tokens de controle do content
- */
+
 
 const logger = require('./asyncLogger');
 
-// Padrões de tokens do Kimi (suporta ambos os formatos: <!|...|> e <|...|>)
 // Function name capture group allows dots, colons, and digits for refs like "functions.read:5"
 // The name is cleaned up later (lines 144-147 strip "functions." prefix and ":N" suffix)
-// Padrão principal: permite espaços em branco ao redor do tool name e no JSON
+
 const KIMI_TOOL_PATTERN = /\|tool_call_begin\|\s*([a-zA-Z_][a-zA-Z0-9_.:-]*)\s*\|tool_call_argument_begin\|(\{[\s\S]*?\})/gs;
-// Padrão permissivo: apenas tool_call_begin + tool name + argumentos (não requer tool_call_end)
+
 const KIMI_TOOL_PATTERN_FLEXIBLE = /\|tool_call_begin\|\s*([a-zA-Z_][a-zA-Z0-9_.:-]*)\s*\|tool_call_argument_begin\|(\{[\s\S]*?\})/gs;
-// Padrão mais simples: apenas "tool_call_begin" + tool name + argumentos JSON (lax matching)
+
 const KIMI_TOOL_PATTERN_SIMPLE = /tool_call_begin\s+([a-zA-Z_][a-zA-Z0-9_.:-]*)[\s\S]*?(\{[\s\S]*?\})/gs;
-// Padrão para Kimi K2.6: <|tool_call_begin|>{"name":"func","arguments":{...}}<|tool_call_end|>
-// O conteúdo entre as tags é um JSON auto-contido com name e arguments.
-// Usa [\s\S] em vez de . para capturar JSON com quebras de linha.
+
 const KIMI_TOOL_PATTERN_TAGGED_JSON = /<\|tool_call_begin\|>(\{[\s\S]*?\})<\|tool_call_end\|>/gs;
 const KIMI_SECTION_END_PATTERN = /<?!?\|tool_calls_section_end\|>/g;
 const KIMI_ANY_TOKEN_PATTERN = /<?!?\|[^|]+\|>/g;
 
-/**
- * Extrai o último JSON válido de uma string
- * Útil quando há concatenação acidental de JSONs no buffer
- * 
- * Exemplo: '{"cmd": "l"}{"cmd": "ls"}' → retorna {"cmd": "ls"}
- * 
- * Retorna null se:
- * - String vazia ou inválida
- * - JSON claramente incompleto (ex: '{"cmd":')
- * - Nenhum JSON válido encontrado
- */
 function extractValidJSON(str) {
   if (!str || typeof str !== 'string') return null;
   
@@ -50,19 +26,19 @@ function extractValidJSON(str) {
   try {
     return JSON.parse(trimmed);
   } catch (e) {
-    // Continua para tentar extrair substring
+    
   }
   
-  // Verifica se parece estar incompleto (não termina com })
-  // Se terminar no meio de uma propriedade, é incompleto
+  
+  
   const lastChar = trimmed[trimmed.length - 1];
   if (lastChar !== '}') {
     // JSON incompleto - ainda recebendo fragments
     return null;
   }
   
-  // Tenta encontrar o último JSON válido na string
-  // Procura por objetos JSON completos (começam com { e terminam com })
+  
+  
   let lastValid = null;
   let depth = 0;
   let startIdx = -1;
@@ -72,7 +48,7 @@ function extractValidJSON(str) {
   for (let i = 0; i < trimmed.length; i++) {
     const char = trimmed[i];
     
-    // Lida com strings (para não confundir { e } dentro de strings)
+    
     if (escapeNext) {
       escapeNext = false;
       continue;
@@ -95,7 +71,7 @@ function extractValidJSON(str) {
     
     if (inString) continue;
     
-    // Conta chaves fora de strings
+    
     if (char === '{') {
       if (depth === 0) {
         startIdx = i;
@@ -108,7 +84,7 @@ function extractValidJSON(str) {
         try {
           lastValid = JSON.parse(candidate);
         } catch (e) {
-          // Ignora candidatos inválidos
+          
         }
       }
     }
@@ -117,33 +93,15 @@ function extractValidJSON(str) {
   return lastValid;
 }
 
-/**
- * Tenta reparar JSON truncado fechando estruturas abertas
- * LAST RESORT: Usado apenas quando JSON.parse e extractValidJSON falham
- * 
- * Algoritmo:
- * 1. Caminha pela string rastreando: dentro de string?, escapes, stack de { e [
- * 2. Encontra a última posição com um par chave-valor completo
- * 3. Trunca nessa posição e fecha estruturas abertas
- * 4. Tenta JSON.parse no resultado
- * 
- * Exemplo:
- *   '{"filePath": "/path/file.js", "oldString": "some cod'
- *   → '{"filePath": "/path/file.js"}'
- *   → { filePath: "/path/file.js" }
- * 
- * @param {string} jsonStr - String JSON truncada
- * @returns {object|null} Objeto parseado ou null se não reparável
- */
 function repairTruncatedJSON(jsonStr) {
   if (!jsonStr || typeof jsonStr !== 'string') return null;
 
   const str = jsonStr.trim();
 
-  // Nada salvável se muito curto
+  
   if (str.length < 2) return null;
 
-  // Já é válido? Retorna direto
+  
   try {
     return JSON.parse(str);
   } catch (e) {
@@ -187,15 +145,6 @@ function repairTruncatedJSON(jsonStr) {
   return found ? pairs : null;
 }
 
-/**
- * Parseia tool calls do Kimi a partir do content
- * O Kimi envia tool calls em formato raw com tokens técnicos
- *
- * Exemplo:
- * <|tool_call_begin|> functions.read:5 <|tool_call_argument_begin|> {"filePath": "..."} <|tool_call_end|>
- *
- * Tenta múltiplos padrões para ser mais permissivo com formatos variantes
- */
 function parseKimiToolCalls(content) {
   // DEBUG: Log first 200 chars of content to see what we're parsing
   logger.debug(`[KimiParser] Input content (first 200): ${content?.substring?.(0, 200) || content}`);
@@ -219,7 +168,7 @@ function parseKimiToolCalls(content) {
 
       if (name === 'tagged_json') {
         // Formato Kimi K2.6: <|tool_call_begin|>{"name":"func","arguments":{...}}<|tool_call_end|>
-        // O JSON único contém name e arguments — extraímos via parse
+        
         try {
           const parsed = JSON.parse(match[1]);
           functionRef = parsed.name;
@@ -233,7 +182,7 @@ function parseKimiToolCalls(content) {
         argsJson = match[2];
       }
 
-      // Extrai nome da função (remove 'functions.' e ':N')
+      
 const funcName = functionRef
     .replace(/^functions\./, '')
     .replace(/:\d+$/, '')
@@ -241,14 +190,14 @@ const funcName = functionRef
 
   logger.debug(`[KimiParser] Regex match - funcName: "${funcName}", argsJson (first 100): "${argsJson?.substring?.(0, 100)}"`);
 
-  // Skip if no valid name
+  
       if (!funcName || funcName.length === 0) {
         logger.debug(`[KimiParser] Skip: empty function name (pattern: ${name})`);
         continue;
       }
 
 try {
-  // Valida que é JSON válido
+  
   const parsedArgs = JSON.parse(argsJson);
   logger.debug(`[KimiParser] Extracted: ${funcName} with args: ${argsJson.substring(0, 50)}...`);
 
@@ -258,7 +207,7 @@ try {
           raw: argsJson
         });
 } catch (e) {
-  // Se não for JSON válido, tenta fallback de extração
+  
   logger.debug(`[KimiParser] JSON parse failed for ${funcName}, raw: ${argsJson.substring(0, 50)}...`);
   const fallbackResult = tryExtractJsonFromText(argsJson);
   if (fallbackResult) {
@@ -275,14 +224,14 @@ try {
 }
     }
 
-    // Se encontrou algo com este padrão, sai (prioriza padrão mais estrito)
+    
     if (toolCalls.length > 0) {
       logger.debug(`[KimiParser] Found ${toolCalls.length} tool calls with pattern: ${name}`);
       break;
     }
   }
 
-  // Fallback final: procurar qualquer JSON no content que pareça ser tool call
+  
   if (toolCalls.length === 0) {
     const fallbackCalls = tryFallbackToolCallExtraction(content);
     if (fallbackCalls.length > 0) {
@@ -294,22 +243,19 @@ try {
   return toolCalls;
 }
 
-/**
- * Tenta extrair JSON de texto mesmo com problemas de formatação
- */
 function tryExtractJsonFromText(text) {
   if (!text || typeof text !== 'string') return null;
 
   const trimmed = text.trim();
 
-  // Já é JSON válido?
+  
   try {
     return JSON.parse(trimmed);
   } catch (e) {
     // Continua...
   }
 
-  // Tenta encontrar objeto JSON no texto
+  
   const jsonMatch = trimmed.match(/\{[^{}]*\}/);
   if (jsonMatch) {
     try {
@@ -322,32 +268,28 @@ function tryExtractJsonFromText(text) {
   return null;
 }
 
-/**
- * Fallback final: procurar padrões de tool call no conteúdo
- * Procura por "name": "xxx" ou "function": { "name": "xxx" }
- */
 function tryFallbackToolCallExtraction(content) {
  const toolCalls = [];
 
- // AGGRESSIVE FALLBACK: procura por qualquer JSON que pareça tool call
- // Usa padrão mais permissivo que aceita JSONs incompletos/parciais
+ 
+ 
 
- // Padrão 1: procura por {"name": "toolName", ... } - mais flexível
+ 
  const jsonObjectPattern = /\{[^}]*"name"[^}]*\}/g;
  let match;
 
  while ((match = jsonObjectPattern.exec(content)) !== null) {
  try {
- // Tenta parsear - pode falhar se JSON incompleto, mas tentamos
+ 
  let parsed;
  try {
  parsed = JSON.parse(match[0]);
  } catch (parseErr) {
- // JSON incompleto - tenta extrair só o que consegue
+ 
  const partialMatch = match[0].match(/"name"\s*:\s*"([^"]+)"/);
  if (partialMatch) {
  const toolName = partialMatch[1];
- // Tenta encontrar argumentos mesmo que incompletos
+ 
  const argsMatch = match[0].match(/"arguments"\s*:\s*(\{[^}]*\})/);
  let args = {};
  if (argsMatch) {
@@ -364,7 +306,7 @@ function tryFallbackToolCallExtraction(content) {
  }
  }
 
- // Extrai nome da tool
+ 
  let toolName = parsed.name || parsed.function?.name;
 
  if (!toolName || typeof toolName !== 'string') continue;
@@ -376,7 +318,7 @@ function tryFallbackToolCallExtraction(content) {
  try {
  args = JSON.parse(args);
  } catch (e) {
- // Tenta extrair JSON do string
+ 
  const extracted = tryExtractJsonFromText(args);
  if (extracted) {
  args = extracted;
@@ -397,17 +339,17 @@ function tryFallbackToolCallExtraction(content) {
  }
  }
 
- // Padrão 2 (AGGRESSIVE): se não encontrou nada, tenta encontrar qualquer "name": "xxx" no content
+ 
  if (toolCalls.length === 0) {
  const nameValuePattern = /"name"\s*:\s*"([a-zA-Z_][a-zA-Z0-9_]*)"/g;
  while ((match = nameValuePattern.exec(content)) !== null) {
  const toolName = match[1];
- // Procura argumentos próximos (nos próximos 200 chars)
+ 
  const searchStart = match.index;
  const searchEnd = Math.min(match.index + 200, content.length);
  const nearbyContent = content.substring(searchStart, searchEnd);
 
- // Tenta encontrar JSON de argumentos
+ 
  const argsMatch = nearbyContent.match(/(\{[^{}]*\})/);
  let args = {};
  if (argsMatch) {
@@ -429,15 +371,11 @@ function tryFallbackToolCallExtraction(content) {
  return toolCalls;
 }
 
-/**
- * Verifica se o content contém tool calls do Kimi
- * Mais permissivo: aceita múltiplos formatos de tokens
- */
 function hasKimiToolCalls(content) {
   if (!content || typeof content !== 'string') return false;
 
-  // Early return com verificação mais permissiva
-  // Aceita: <!|tool_call_begin|>, <|tool_call_begin|>, tool_call_begin, ou apenas "tool_call"
+  
+  
   const hasToken = content.includes('<!|tool_call_begin') ||
                    content.includes('<|tool_call_begin') ||
                    content.includes('tool_call_begin') ||
@@ -445,7 +383,7 @@ function hasKimiToolCalls(content) {
 
   if (!hasToken) return false;
 
-  // Tenta cada padrão
+  
   const patterns = [
     KIMI_TOOL_PATTERN,
     KIMI_TOOL_PATTERN_FLEXIBLE,
@@ -461,15 +399,6 @@ function hasKimiToolCalls(content) {
   return false;
 }
 
-/**
- * Remove todos os tokens técnicos do Kimi do content
- * Retorna o texto limpo para o usuário
- */
-/**
- * Remove todos os tokens técnicos do Kimi do content
- * Versão mais permissiva: tenta múltiplos padrões
- * Retorna o texto limpo para o usuário
- */
 function removeKimiTokens(content) {
   if (!content || typeof content !== 'string') return content;
 
@@ -484,7 +413,7 @@ function removeKimiTokens(content) {
 
   let result = content;
 
-  // Tenta cada padrão de tool call
+  
   const patterns = [
     KIMI_TOOL_PATTERN,
     KIMI_TOOL_PATTERN_FLEXIBLE,
@@ -500,23 +429,20 @@ function removeKimiTokens(content) {
   // Remove section end
   result = result.replace(KIMI_SECTION_END_PATTERN, '');
 
-  // Remove tokens Kimi genéricos (qualquer <|...|> ou <!|...|>)
+  
   result = result.replace(KIMI_ANY_TOKEN_PATTERN, '');
 
-  // Remove "tool_call_begin" solto (sem delimitadores)
+  
   result = result.replace(/\btool_call_begin\b/g, '');
   result = result.replace(/\btool_call_argument_begin\b/g, '');
   result = result.replace(/\btool_call_end\b/g, '');
 
-  // Normaliza espaços múltiplos
+  
   result = result.replace(/\s+/g, ' ').trim();
 
   return result;
 }
 
-/**
- * Logging seguro de tool calls (sem expor dados sensíveis)
- */
 function logToolCall(toolName, status, size, error = null) {
   const baseMsg = `[ToolCall] [${toolName}] ${status}`;
   
@@ -527,11 +453,6 @@ function logToolCall(toolName, status, size, error = null) {
   }
 }
 
-/**
- * Converte uma resposta completa de chat completion em eventos SSE
- * Usado quando queremos receber non-streaming do upstream
- * mas enviar streaming para o cliente
- */
 function convertResponseToSSE(completionResponse) {
   const events = [];
   const choice = completionResponse.choices?.[0];
@@ -546,7 +467,7 @@ function convertResponseToSSE(completionResponse) {
     model: String(completionResponse.model),
   };
 
-  // Processa content e tool calls do Kimi se houver
+  
   let cleanContent = message.content;
   let kimiToolCalls = [];
   
@@ -559,9 +480,9 @@ function convertResponseToSSE(completionResponse) {
     }
   }
 
-  // Se tem conteúdo de texto
+  
   if (cleanContent) {
-    // Envia em uma única chunk (simplificado)
+    
     events.push({
       ...baseChunk,
       choices: [
@@ -577,7 +498,7 @@ function convertResponseToSSE(completionResponse) {
     });
   }
 
-  // Combina tool calls do message com as do Kimi
+  
   const allToolCalls = [
     ...(message.tool_calls || []),
   ...kimiToolCalls.map((tc, idx) => ({
@@ -591,7 +512,7 @@ name: tc.name || 'unknown_tool',
     }))
   ];
 
-  // Se tem tool calls
+  
   if (allToolCalls.length > 0) {
     events.push({
       ...baseChunk,
@@ -616,7 +537,7 @@ name: tc.function?.name || 'unknown_tool',
     });
   }
 
-  // Chunk final com finish_reason
+  
   events.push({
     ...baseChunk,
     choices: [
@@ -631,15 +552,6 @@ name: tc.function?.name || 'unknown_tool',
   return events;
 }
 
-/**
- * Valida e corrige tool calls
- * - Converte arguments objeto para string
- * - Validates JSON structure
- * - Filters out truly invalid tool calls (no name, no parseable args)
- *
- * IMPORTANT: Does NOT filter individual argument values.
- * JSON.parse never produces undefined; null/0/false/"" are valid values.
- */
 function fixToolCalls(toolCalls) {
   if (!toolCalls || !Array.isArray(toolCalls)) return [];
 
@@ -649,12 +561,12 @@ function fixToolCalls(toolCalls) {
 
       const toolName = tc.function.name || 'unknown';
 
-      // Se arguments é objeto, converter pra string
+      
       if (typeof tc.function.arguments === 'object' && tc.function.arguments !== null) {
         tc.function.arguments = JSON.stringify(tc.function.arguments);
       }
 
-      // Se arguments é undefined ou null, use empty object
+      
       if (tc.function.arguments == null) {
         tc.function.arguments = '{}';
       }
@@ -664,7 +576,7 @@ function fixToolCalls(toolCalls) {
         tc.function.arguments = '{}';
       }
 
-      // Verifica se parece estar incompleto (não termina com })
+      
       const trimmed = tc.function.arguments.trim();
       const lastChar = trimmed[trimmed.length - 1];
       
@@ -673,7 +585,7 @@ function fixToolCalls(toolCalls) {
         return null;
       }
 
-      // Extrai JSON válido (trata duplicação)
+      
       const parsedArgs = extractValidJSON(tc.function.arguments);
       
       if (!parsedArgs && trimmed !== '{}') {
@@ -690,28 +602,17 @@ function fixToolCalls(toolCalls) {
     .filter(Boolean);
 }
 
-/**
- * Acumula fragments de tool calls em streaming
- * Gerencia múltiplas tool calls simultâneas
- *
- * Supports two paths:
- * 1. Native delta.tool_calls (OpenAI format) — args arrive as string fragments
- * 2. Kimi content tokens (<|tool_call_begin|>) — parsed from buffered content
- */
 class ToolCallBuffer {
   constructor() {
     this.buffers = new Map(); // Key: toolIndex -> { id, name, arguments }
     this.baseChunk = null;
-    // Content buffer for Kimi-style tool calls that arrive as content tokens
+    
     // split across multiple streaming chunks
     this.kimiContentBuffer = '';
     this.kimiContentBuffering = false;
   }
 
-  /**
-   * Processa um delta de tool calls (native format)
-   * @returns {boolean} true se acumulou (não deve repassar), false se não é tool call
-   */
+  
   accumulate(delta) {
     if (!delta?.tool_calls || !Array.isArray(delta.tool_calls)) {
       return false;
@@ -756,25 +657,13 @@ class ToolCallBuffer {
     return true;
   }
 
-  /**
-   * Buffer content that may contain Kimi tool call tokens split across chunks.
-   * Returns the portion of content that is NOT part of a tool call (to be emitted as text).
-   *
-   * Strategy:
-   * - If we see tool_call_begin token (or partial), start buffering
-   * - Keep buffering until we see tool_call_end or tool_calls_section_end
-   * - Once complete, parse tool calls from the buffer
-   * - Return any non-tool-call content for normal emission
-   *
-   * @param {string} content - The delta.content from a streaming chunk
-   * @returns {{ cleanContent: string, foundToolCalls: boolean }}
-   */
+  
   bufferKimiContent(content) {
     if (!content || typeof content !== 'string') {
       return { cleanContent: content, foundToolCalls: false };
     }
 
-    // FAST EXIT: If not currently buffering and content has no tool call indicators,
+    
     // skip all marker detection (covers 95%+ of chunks)
     if (!this.kimiContentBuffering &&
         !content.includes('|') &&
@@ -817,12 +706,12 @@ class ToolCallBuffer {
         const toolCalls = parseKimiToolCalls(buffered);
         if (toolCalls.length > 0) {
           this.accumulateKimiToolCalls(toolCalls);
-          // Remove tool call tokens and return any remaining clean content
+          
           const clean = removeKimiTokens(buffered);
           return { cleanContent: clean, foundToolCalls: true };
         }
 
-        // No tool calls found despite markers — return cleaned content
+        
         const clean = removeKimiTokens(buffered);
         return { cleanContent: clean, foundToolCalls: false };
       }
@@ -843,13 +732,13 @@ class ToolCallBuffer {
         }
       }
 
-      // Start marker but no end marker — begin buffering
+      
       this.kimiContentBuffering = true;
       this.kimiContentBuffer = content;
       return { cleanContent: '', foundToolCalls: false };
     }
 
-    // No tool call markers at all — pass through
+    
     // But check for partial markers that might indicate a split
     if (mayHavePartialMarker) {
       // Content might end with the start of a tool call token
@@ -881,14 +770,12 @@ class ToolCallBuffer {
       return { cleanContent: clean, foundToolCalls: true };
     }
 
-    // No tool calls — return whatever was buffered as clean content
+    
     const clean = removeKimiTokens(buffered);
     return { cleanContent: clean, foundToolCalls: false };
   }
 
-  /**
-   * Acumula tool calls parseadas do Kimi
-   */
+  
   accumulateKimiToolCalls(toolCalls) {
     if (!Array.isArray(toolCalls) || toolCalls.length === 0) return;
 
@@ -906,14 +793,7 @@ class ToolCallBuffer {
     }
   }
 
-  /**
-   * Retorna tool calls completas e validadas
-   * Usa extractValidJSON para lidar com JSON duplicado no buffer
-   *
-   * IMPORTANT: Does NOT filter out valid argument values.
-   * Only removes truly undefined/null top-level properties (not nested).
-   * Arrays, empty strings, 0, false, etc. are preserved.
-   */
+  
   getCompleteToolCalls() {
     const toolCalls = [];
 
@@ -922,13 +802,13 @@ class ToolCallBuffer {
       const argsStr = buf.function.arguments || '';
       const argsSize = argsStr.length;
 
-      // Skip if no function name (truly invalid tool call)
+      
       if (!buf.function.name || buf.function.name === '') {
         logToolCall(toolName, 'inválida (sem nome)', 0);
         continue;
       }
 
-      // If no arguments accumulated, emit with empty object and warn
+      
       if (argsSize === 0) {
         logToolCall(toolName, 'sem args (aceito vazio)', 0);
         toolCalls.push({
@@ -986,9 +866,9 @@ class ToolCallBuffer {
         continue;
       }
 
-      // CRITICAL FIX: Do NOT strip valid argument values!
+      
       // The old code filtered ALL undefined/null values from the parsed args object.
-      // This is correct for removing noise, BUT we must NOT do it for the RESULT
+      
       // of JSON.parse — JSON.parse never produces undefined values.
       // The issue was that re-serializing after filtering could lose structure.
       //
@@ -1022,16 +902,12 @@ class ToolCallBuffer {
     this.kimiContentBuffering = false;
   }
 
-  /**
-   * Verifica se tem tool calls pendentes
-   */
+  
   hasPending() {
     return this.buffers.size > 0;
   }
 
-  /**
-   * Retorna estatísticas do buffer
-   */
+  
   getStats() {
     return {
       count: this.buffers.size,

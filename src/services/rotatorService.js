@@ -1,14 +1,4 @@
-/**
- * Serviço de Rotação com Weighted Selection
- * Distribui requisições entre APIs com peso baseado em velocidade
- * 
- * v3.0 - Weighted Random Selection
- * - APIs mais rápidas recebem mais tráfego (peso maior)
- * - APIs lentas recebem menos tráfego mas ainda são testadas
- * - Circuit breaker para APIs problemáticas
- * - Cache de APIs saudáveis com TTL
- * - Tracking de latência por API
- */
+
 
 const apiConfig = require('../config/apiConfig');
 const logger = require('../utils/asyncLogger');
@@ -19,16 +9,16 @@ class RotatorService {
     this.rotationHistory = [];
     this.maxHistorySize = 1000;
     
-    // Cache de APIs saudáveis
+    
     this.cachedHealthyApis = [];
     this.lastCacheUpdate = 0;
     this.cacheTTL = 10000; // 10 segundos
     
-    // Tracking de latência por API
+    
     this.apiLatencies = new Map();  // apiId → { avg, samples }
     this.latencyWindow = 20;
     
-    // Circuit Breaker por API
+    
     this.circuitBreakers = new Map(); // apiId → { failures, state, lastFailure }
     this.circuitThreshold = 5;
     this.circuitTimeout = 60000; // 60s
@@ -36,16 +26,16 @@ class RotatorService {
     // ============================================
     // v3.0: SPEED RANKING (weighted selection)
     // ============================================
-    this.speedRanking = new Map();   // Recebido do healthService
+    this.speedRanking = new Map();   
     this.useWeightedSelection = true;
 
-    // Registra listener para invalidar cache quando API mudar
+    
     apiConfig.addChangeListener(() => this.invalidateCache());
     this._poolCache = { pool: [], totalWeight: 0, lastBuilt: 0, ttl: 100 };
   }
 
   // ============================================
-  // v3.0: Atualiza speed ranking do healthService
+  
   // ============================================
   updateSpeedRanking(ranking) {
     if (ranking && ranking instanceof Map) {
@@ -53,16 +43,11 @@ class RotatorService {
     }
   }
 
-  /**
-   * Seleciona a próxima API disponível
-   * 
-   * v3.0: Weighted random selection baseado em speed ranking
-   * - Fallback para round-robin com ordenação por latência se ranking não disponível
-   */
+  
   async getNextApi(preferredModel = null, excludeApis = []) {
     const now = Date.now();
     
-    // Atualiza cache se expirado
+    
     if (now - this.lastCacheUpdate > this.cacheTTL) {
       this.cachedHealthyApis = apiConfig.getHealthyApis();
       this.lastCacheUpdate = now;
@@ -79,7 +64,7 @@ class RotatorService {
       }
     }
 
-    // Filtra APIs excluídas
+    
     const excludeSet = new Set(excludeApis);
     if (excludeSet.size > 0) {
       apis = apis.filter(api => !excludeSet.has(api.id));
@@ -88,10 +73,10 @@ class RotatorService {
       }
     }
 
-    // Filtra APIs com circuit breaker aberto
+    
     apis = apis.filter(api => !this.isCircuitBreakerOpen(api.id));
     if (apis.length === 0) {
-      // Se todas estiverem com circuit breaker aberto, tenta usar todas mesmo assim
+      
       apis = this.cachedHealthyApis;
     }
 
@@ -102,14 +87,11 @@ class RotatorService {
       return this.weightedSelection(apis);
     }
 
-    // Fallback: seleção baseada em latência (ordenação)
+    
     return this.latencyBasedSelection(apis);
   }
 
-  /**
-   * Seleção ponderada (weighted random)
-   * APIs com peso maior são selecionadas mais frequentemente
-   */
+  
   weightedSelection(apis) {
     const now = Date.now();
 
@@ -164,14 +146,11 @@ class RotatorService {
     return selected;
   }
 
-  /**
-   * Seleção baseada em latência (fallback)
-   * Ordena APIs por latência média e usa round-robin na ordenação
-   */
+  
   latencyBasedSelection(apis) {
     const now = Date.now();
 
-    // Ordena APIs por latência (mais rápidas primeiro)
+    
     const sortedApis = apis
       .map(api => {
         const latData = this.apiLatencies.get(api.id);
@@ -180,7 +159,7 @@ class RotatorService {
       })
       .sort((a, b) => a.avgLatency - b.avgLatency);
 
-    // Procura a primeira API disponível (fora do rate limit)
+    
     for (const { api } of sortedApis) {
       if (apiConfig.canMakeRequest(api.id)) {
         apiConfig.recordRequest(api.id);
@@ -189,7 +168,7 @@ class RotatorService {
       }
     }
 
-    // Se todas estiverem com rate limit, usa round-robin em todas
+    
     if (this.currentIndex >= apis.length) {
       this.currentIndex = 0;
     }
@@ -201,9 +180,7 @@ class RotatorService {
     return selected;
   }
 
-  /**
-   * Verifica se o circuit breaker está aberto para uma API
-   */
+  
   isCircuitBreakerOpen(apiId) {
     const breaker = this.circuitBreakers.get(apiId);
     if (!breaker) return false;
@@ -211,7 +188,7 @@ class RotatorService {
     const now = Date.now();
 
     if (breaker.state === 'open') {
-      // Verifica se já passou o timeout para tentar novamente
+      
       if (now - breaker.lastFailure > this.circuitTimeout) {
         breaker.state = 'half-open';
         return false;
@@ -222,9 +199,7 @@ class RotatorService {
     return false;
   }
 
-  /**
-   * Registra sucesso de uma requisição
-   */
+  
   recordSuccess(apiId) {
     const breaker = this.circuitBreakers.get(apiId);
     if (breaker) {
@@ -233,9 +208,7 @@ class RotatorService {
     }
   }
 
-  /**
-   * Registra falha de uma requisição
-   */
+  
   recordFailure(apiId) {
     if (!this.circuitBreakers.has(apiId)) {
       this.circuitBreakers.set(apiId, {
@@ -254,9 +227,7 @@ class RotatorService {
     }
   }
 
-  /**
-   * Registra latência de uma requisição
-   */
+  
   recordLatency(apiId, responseTime) {
     if (!this.apiLatencies.has(apiId)) {
       this.apiLatencies.set(apiId, { avg: responseTime, samples: 1 });
@@ -266,12 +237,12 @@ class RotatorService {
     const latData = this.apiLatencies.get(apiId);
     const totalSamples = latData.samples + 1;
     
-    // Média móvel
+    
     if (totalSamples <= this.latencyWindow) {
       latData.avg = ((latData.avg * latData.samples) + responseTime) / totalSamples;
       latData.samples = totalSamples;
     } else {
-      // Exponential moving average para janelas maiores
+      
       const alpha = 2 / (this.latencyWindow + 1);
       latData.avg = (alpha * responseTime) + ((1 - alpha) * latData.avg);
     }
@@ -293,9 +264,7 @@ class RotatorService {
     return status;
   }
 
-  /**
-   * Reseta o estado de rotação
-   */
+  
   resetRotation() {
     this.currentIndex = 0;
     this.cachedHealthyApis = [];
@@ -303,18 +272,14 @@ class RotatorService {
     logger.info('[Rotator] Rotation index reset');
   }
 
-  /**
-   * Invalida cache de APIs saudáveis
-   */
+  
   invalidateCache() {
     this.cachedHealthyApis = [];
     this.lastCacheUpdate = 0;
     this._poolCache.lastBuilt = 0;
   }
 
-  /**
-   * Log de rotação para debug
-   */
+  
   logRotation(apiId, strategy) {
     this.rotationHistory.push({
       timestamp: new Date().toISOString(),
@@ -327,9 +292,7 @@ class RotatorService {
     }
   }
 
-  /**
-   * Retorna estatísticas de rotação
-   */
+  
   getRotationStats() {
     const apis = apiConfig.getAllApis();
     return {
@@ -343,9 +306,7 @@ class RotatorService {
     };
   }
 
-  /**
-   * Retorna lista de APIs que atingiram rate limit
-   */
+  
   getRateLimitedApis() {
     const apis = apiConfig.getAllApis();
     const rateLimited = [];
@@ -366,9 +327,7 @@ class RotatorService {
     };
   }
 
-  /**
-   * Retorna histórico de rotação
-   */
+  
   getRotationHistory(limit = 100) {
     return this.rotationHistory.slice(-limit);
   }

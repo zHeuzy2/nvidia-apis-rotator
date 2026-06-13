@@ -1,7 +1,4 @@
-/**
- * Rotas de Proxy para NVIDIA NIM API
- * Compatível com OpenAI API format
- */
+
 
 const express = require('express');
 const router = express.Router();
@@ -33,7 +30,6 @@ function getModelsFromCache() {
   return modelsCache;
 }
 
-// Aplica autenticação em todas as rotas de proxy
 router.use(proxyAuthMiddleware);
 
 /**
@@ -106,9 +102,6 @@ router.get('/models', async (req, res) => {
   }
 });
 
-/**
- * Catch-all para outros endpoints
- */
 router.all('/*', async (req, res) => {
   try {
     const endpoint = req.path;
@@ -124,21 +117,13 @@ router.all('/*', async (req, res) => {
   }
 });
 
-/**
- * Handler para requisições com streaming
- *
- * ESTRATÉGIA v5.0:
- * - TEXTO: Streaming real com flush imediato
- * - TOOL CALLS: Buffer inteligente com tratamento de JSON duplicado
- * - KIMI: Parsing de tokens técnicos no content
- */
 async function handleStreamRequest(req, res, endpoint, body, warnings = []) {
   const startTime = Date.now();
 
   const modelConfig = modelsConfig.getModel(body?.model);
   const thinkingField = modelConfig?.thinkingField || 'reasoning_content';
 
-  // Auto-bump max_tokens para modelos thinking
+  
   if (modelConfig?.recommendedMinTokens && (!body.max_tokens || body.max_tokens < modelConfig.recommendedMinTokens)) {
     body.max_tokens = modelConfig.recommendedMinTokens;
   }
@@ -242,7 +227,7 @@ async function handleStreamRequest(req, res, endpoint, body, warnings = []) {
       s.removeAllListeners('data');
       s.removeAllListeners('end');
       s.removeAllListeners('error');
-      // Adiciona listener dummy para engolir erros assíncronos pós-destruição (ex: RequestAbortedError)
+      
       s.on('error', () => {});
       if (!s.destroyed) s.destroy();
     }
@@ -500,7 +485,7 @@ async function handleStreamRequest(req, res, endpoint, body, warnings = []) {
             continue;
           }
 
-          // ─── ROLE sem conteúdo ───
+          
           if (delta?.role && !delta?.tool_calls && delta?.content == null) {
             safeWriteSSE(`data: ${JSON.stringify(parsed)}\n\n`);
             continue;

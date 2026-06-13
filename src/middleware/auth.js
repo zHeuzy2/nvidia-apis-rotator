@@ -1,11 +1,8 @@
-/**
- * Middleware de autenticação para proxy
- * Verifica se o cliente tem acesso à API
- */
+
 function proxyAuthMiddleware(req, res, next) {
   const proxyKey = process.env.PROXY_API_KEY;
   
-  // Se não há chave de proxy configurada, permite acesso
+  
   if (!proxyKey) {
     return next();
   }

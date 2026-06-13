@@ -1,16 +1,9 @@
-/**
- * Serviço de Validação de Modelos
- * Valida e normaliza parâmetros baseado nas especificações de cada modelo
- */
+
 
 const modelsConfig = require('../config/modelsConfig');
 
 class ModelValidationService {
-  /**
-   * Valida e normaliza uma requisição de chat completions
-   * @param {object} body - Corpo da requisição
-   * @returns {object} - { validatedBody, warnings[], errors[] }
-   */
+  
   validateRequest(body) {
     const warnings = [];
     const errors = [];
@@ -20,17 +13,16 @@ class ModelValidationService {
       return { validatedBody: {}, warnings, errors };
     }
 
-// Clona o body profundamente para não modificar o original
-    // Isso é crucial para mensagens multimodais com imagens
+    
     const validatedBody = structuredClone(body);
 
-    // 1. Resolve e valida o modelo
+    
     const { modelId, modelConfig, modelWarning } = this.resolveAndValidateModel(validatedBody.model);
     validatedBody.model = modelId;
     
     if (modelWarning) warnings.push(modelWarning);
 
-    // Se o modelo não for suportado, não podemos validar outros parâmetros
+    
     if (!modelConfig) {
       warnings.push(`Unknown model: ${modelId}. Skipping parameter validation.`);
       return { validatedBody, warnings, errors };
@@ -52,27 +44,22 @@ class ModelValidationService {
     const visionWarning = this.validateVisionParams(validatedBody, modelConfig);
     if (visionWarning) warnings.push(visionWarning);
 
-// 6. Aplica top_p padrão do modelo se não especificado
     if (validatedBody.top_p === undefined || validatedBody.top_p === null) {
       if (modelConfig.defaultTopP !== undefined) {
         validatedBody.top_p = modelConfig.defaultTopP;
       }
     }
 
-    // 7. Valida top_p e outros parâmetros
+    
     const otherWarnings = this.validateOtherParams(validatedBody, modelConfig);
     warnings.push(...otherWarnings);
 
     return { validatedBody, warnings, errors };
   }
 
-  /**
-   * Resolve o modelo (alias -> full name -> default)
-   * @param {string} modelName - Nome do modelo ou alias
-   * @returns {object} - { modelId, modelConfig, warning }
-   */
+  
   resolveAndValidateModel(modelName) {
-    // Se nenhum modelo especificado, usa o default
+    
     if (!modelName) {
       const defaultModel = modelsConfig.defaultModel;
       const modelConfig = modelsConfig.getModel(defaultModel);
@@ -83,10 +70,10 @@ class ModelValidationService {
       };
     }
 
-    // Resolve o ID do modelo (alias -> full name)
+    
     const resolvedId = modelsConfig.resolveModelId(modelName);
     
-    // Verifica se é um modelo suportado
+    
     const modelConfig = modelsConfig.getModel(resolvedId);
 
     if (!modelConfig) {
@@ -97,7 +84,7 @@ class ModelValidationService {
       };
     }
 
-    // Se houve alias, menciona no warning
+    
     if (resolvedId !== modelName) {
       return {
         modelId: resolvedId,
@@ -113,22 +100,17 @@ class ModelValidationService {
     };
   }
 
-  /**
-   * Valida e ajusta max_tokens baseado no modelo
-   * @param {object} body - Corpo da requisição (será modificado)
-   * @param {object} modelConfig - Configuração do modelo
-   * @returns {string|null} - Warning message se necessário
-   */
+  
   validateMaxTokens(body, modelConfig) {
     const { maxOutputTokens } = modelConfig;
     
-    // Se não especificado, usa o default do modelo
+    
     if (body.max_tokens === undefined || body.max_tokens === null) {
       body.max_tokens = maxOutputTokens;
       return null;
     }
 
-    // Valida se está dentro do limite
+    
     const requestedTokens = body.max_tokens;
     
     if (requestedTokens <= 0) {
@@ -144,23 +126,18 @@ class ModelValidationService {
     return null;
   }
 
-  /**
-   * Valida e ajusta temperature baseado no modelo
-   * @param {object} body - Corpo da requisição (será modificado)
-   * @param {object} modelConfig - Configuração do modelo
-   * @returns {array} - Array de warnings
-   */
+  
   validateTemperature(body, modelConfig) {
     const warnings = [];
     const { defaultTemperature, temperatureRange } = modelConfig;
 
-    // Se não especificado, usa o default do modelo
+    
     if (body.temperature === undefined || body.temperature === null) {
       body.temperature = defaultTemperature;
       return warnings;
     }
 
-    // Verifica se é um modelo com temperatura fixa
+    
     if (temperatureRange.min === temperatureRange.max) {
       if (body.temperature !== temperatureRange.min) {
         const original = body.temperature;
@@ -181,7 +158,7 @@ class ModelValidationService {
       warnings.push(`temperature (${requestedTemp}) above maximum (${temperatureRange.max}), set to ${temperatureRange.max}`);
     }
 
-    // Ajusta temperatura para instant mode se aplicável
+    
     if (modelConfig.supportsInstantMode && body.thinking && body.thinking.type === 'disabled') {
       if (modelConfig.instantTemperature !== undefined) {
         if (body.temperature !== modelConfig.instantTemperature) {
@@ -195,16 +172,11 @@ class ModelValidationService {
     return warnings;
   }
 
-  /**
-   * Valida parâmetros de thinking
-   * @param {object} body - Corpo da requisição
-   * @param {object} modelConfig - Configuração do modelo
-   * @returns {array} - Array de warnings
-   */
+  
   validateThinkingParams(body, modelConfig) {
     const warnings = [];
     
-    // Se o modelo não suporta thinking
+    
     if (!modelConfig.supportsThinking) {
       if (body.thinking) {
         warnings.push(`Model ${modelConfig.id} does not support thinking parameter, ignoring`);
@@ -212,9 +184,9 @@ class ModelValidationService {
       return warnings;
     }
 
-    // Se não há thinking parameter, está OK
+    
     if (!body.thinking) {
-      // Para modelos que suportam thinking, pode deixar como default
+      
       return warnings;
     }
 
@@ -238,7 +210,7 @@ class ModelValidationService {
       }
     }
 
-    // Valida thinking budget_tokens se suportado
+    
     if (thinking.budget_tokens !== undefined && modelConfig.thinkingConfig) {
       const budget = thinking.budget_tokens;
       if (budget < 0) {
@@ -250,17 +222,17 @@ class ModelValidationService {
 
     // ============================================
     // FIX: Kimi 2.5 + Tools Conflict
-    // O modelo tende a alucinar tool calls dentro do thinking block
-    // Solução: Permitir, mas adicionar aviso. O parser no proxy lidará com a robustez.
+    
+    
     // ============================================
     if (modelConfig.id === 'moonshotai/kimi-k2.5' && body.tools && body.tools.length > 0) {
       if (thinking.type !== 'disabled') {
-         // Não forçamos mais disabled, apenas avisamos
+         
          warnings.push(`Model ${modelConfig.id} with Tools + Thinking enabled. Ensure client can handle potential hallucinations in reasoning.`);
       }
     }
 
-    // Para modelos interleaved, avisa sobre preservação
+    
     if (modelConfig.thinkingFormat === 'interleaved' && modelConfig.preserveThinking) {
       if (!body.preserve_thinking) {
         warnings.push(`Model ${modelConfig.id} uses interleaved thinking, recommended to preserve_thinking=true for context`);
@@ -270,16 +242,11 @@ class ModelValidationService {
     return warnings;
   }
 
-  /**
-   * Valida parâmetros de visão (imagens, vídeo, PDF)
-   * @param {object} body - Corpo da requisição
-   * @param {object} modelConfig - Configuração do modelo
-   * @returns {string|null} - Warning message se necessário
-   */
+  
   validateVisionParams(body, modelConfig) {
-    // Se o modelo não suporta visão
+    
     if (!modelConfig.supportsVision) {
-      // Verifica se há conteúdo de imagem nas mensagens
+      
       if (body.messages) {
         const hasImage = body.messages.some(msg => {
           if (msg.content && Array.isArray(msg.content)) {
@@ -297,12 +264,7 @@ class ModelValidationService {
     return null;
   }
 
-  /**
-   * Valida outros parâmetros comuns
-   * @param {object} body - Corpo da requisição
-   * @param {object} modelConfig - Configuração do modelo
-   * @returns {array} - Array de warnings
-   */
+  
   validateOtherParams(body, modelConfig) {
     const warnings = [];
 
@@ -335,11 +297,7 @@ class ModelValidationService {
     return warnings;
   }
 
-  /**
-   * Retorna informações sobre um modelo
-   * @param {string} modelId - ID do modelo ou alias
-   * @returns {object|null} - Informações do modelo ou null
-   */
+  
   getModelInfo(modelId) {
     const resolvedId = modelsConfig.resolveModelId(modelId);
     const modelConfig = modelsConfig.getModel(resolvedId);
@@ -362,10 +320,7 @@ class ModelValidationService {
     };
   }
 
-  /**
-   * Lista todos os modelos suportados
-   * @returns {array} - Array de informações dos modelos
-   */
+  
   listAllModels() {
     return modelsConfig.getAllModels().map(model => ({
       id: model.id,

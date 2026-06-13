@@ -1,14 +1,4 @@
-/**
- * Serviço de Health Check + Speed Ranking
- * Monitora a saúde e velocidade das APIs NVIDIA
- * 
- * v3.0 - Migrado para undici + Sistema de Speed Ranking
- * - Testa velocidade real de cada API via chat completion a cada 35s
- * - Constrói ranking: APIs mais rápidas ganham peso maior
- * - APIs com timeout (>30s) são marcadas como unhealthy
- * - APIs muito lentas (>8s consistentes) são depriorizadas
- * - Ranking alimenta o rotatorService para weighted selection
- */
+
 
 const { Pool } = require('undici');
 const dns = require('dns');
@@ -47,18 +37,16 @@ class HealthService {
     // SPEED RANKING SYSTEM
     // ============================================
     this.speedRanking = new Map();       // apiId → { samples, avgSpeed, weight, rank }
-    this.rankingWindow = 8;              // Últimas 8 medições para média
+    this.rankingWindow = 8;              
     this.benchmarkTimeout = 30000;       // Timeout duro: 30s
-    this.slowThreshold = 8000;           // APIs > 8s são depriorizadas (peso reduzido 10x)
+    this.slowThreshold = 8000;           
     this.unhealthyThreshold = 30000;     // APIs > 30s = unhealthy
 
-    // Pool compartilhado para health checks e benchmarks
+    
     this.pools = new Map(); // apiId → Pool
   }
 
-  /**
-   * Retorna ou cria pool undici para uma API
-   */
+  
   getPool(api) {
     if (this.pools.has(api.id)) {
       return this.pools.get(api.id);
@@ -84,9 +72,7 @@ class HealthService {
     return pool;
   }
 
-  /**
-   * Inicia o monitoramento de health check + speed benchmark
-   */
+  
   start() {
     if (this.intervalId) {
       console.log('Health check já está rodando');
@@ -101,13 +87,13 @@ class HealthService {
     // Faz check inicial
     this.checkAll();
     
-    // Primeiro benchmark de velocidade — roda síncrono antes do servidor aceitar tráfego
-    // Isso evita que a primeira requisição do cliente pegue APIs lentas
+    
+    
     this.benchmarkAll().then(() => {
       console.log('[SpeedRank] Ranking inicial construído');
     });
 
-    // Agenda checks periódicos (saúde simples: GET /models)
+    
     this.intervalId = setInterval(() => {
       this.checkAll();
     }, this.checkInterval);
@@ -117,7 +103,7 @@ class HealthService {
       this.benchmarkAll();
     }, this.benchmarkInterval);
 
-    // Pre-warming de conexões
+    
     this.warmupIntervalId = setInterval(() => {
       this.warmupConnections();
     }, this.warmupInterval);
@@ -129,9 +115,7 @@ class HealthService {
     console.log(`  Slow threshold: ${this.slowThreshold / 1000}s`);
   }
 
-  /**
-   * Para o monitoramento
-   */
+  
   stop() {
     if (this.intervalId) {
       clearInterval(this.intervalId);
@@ -148,9 +132,7 @@ class HealthService {
     console.log('Health check monitor parado');
   }
 
-  /**
-   * Pre-warming de conexões (HEAD requests leves)
-   */
+  
   async warmupConnections() {
     const apis = apiConfig.getHealthyApis();
     
@@ -165,18 +147,16 @@ class HealthService {
           headers: { 'Authorization': `Bearer ${api.apiKey}` },
           signal: AbortSignal.timeout(5000),
         });
-        // Consome o body (mesmo vazio) para liberar a conexão
+        
       } catch (e) {
-        // Ignora erros - objetivo é só manter conexão quente
+        
       }
     });
 
     await Promise.allSettled(warmupPromises);
   }
 
-  /**
-   * Verifica saúde de todas as APIs (GET /v1/models)
-   */
+  
   async checkAll() {
     const apis = apiConfig.getAllApis();
     
@@ -202,9 +182,7 @@ class HealthService {
     return results;
   }
 
-  /**
-   * Verifica saúde de uma API específica
-   */
+  
   async checkApi(api) {
     const startTime = Date.now();
     
@@ -291,11 +269,7 @@ class HealthService {
   // SPEED BENCHMARK SYSTEM
   // ============================================
 
-  /**
-   * Faz benchmark de velocidade em uma API
-   * Envia um chat completion real com kimi-k2.6
-   * Mede o tempo de resposta completo
-   */
+  
   async benchmarkApiSpeed(api) {
     const testBody = JSON.stringify({
       model: 'moonshotai/kimi-k2.6',
@@ -325,7 +299,7 @@ class HealthService {
       const elapsed = Date.now() - startTime;
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        // Consome o body para não vazar memória
+        
         try { await response.body.text(); } catch (e) { /* ignore */ }
         
         return { 
@@ -360,16 +334,13 @@ class HealthService {
     }
   }
 
-  /**
-   * Roda benchmark em todas as APIs habilitadas
-   * Constrói o ranking de velocidade
-   */
+  
   async benchmarkAll() {
     const apis = apiConfig.getAllApis().filter(a => a.enabled);
     if (apis.length === 0) return;
 
-    // Staggered: testa uma API por vez com 300ms de delay
-    // Evita flood de rate limit que atrapalha requisições reais
+    
+    
     const results = [];
     for (const api of apis) {
       const r = await this.benchmarkApiSpeed(api).catch(e => ({ healthy: false, responseTime: 0, timedOut: true, error: e.message }));
@@ -402,13 +373,13 @@ class HealthService {
       }
 
       if (!healthy && status && status >= 500) {
-        // Server error = unhealthy temporário
+        
         apiConfig.updateApi(api.id, { healthy: false });
         this.updateRanking(api.id, null);
         continue;
       }
 
-      // API saudável → atualiza ranking
+      
       apiConfig.updateApi(api.id, { healthy: true });
       this.updateRanking(api.id, responseTime);
       updatedCount++;
@@ -418,10 +389,10 @@ class HealthService {
       }
     }
 
-    // Computa pesos baseado no ranking atualizado
+    
     this.computeWeights();
 
-    // Push ranking para o rotatorService
+    
     rotatorService.updateSpeedRanking(this.speedRanking);
 
     // Log resumido
@@ -440,15 +411,13 @@ class HealthService {
     }
   }
 
-  /**
-   * Atualiza o ranking de velocidade de uma API
-   */
+  
   updateRanking(apiId, responseTime) {
     if (!this.speedRanking.has(apiId)) {
       this.speedRanking.set(apiId, { 
         samples: [], 
         avgSpeed: 0, 
-        weight: 0.01,  // Peso mínimo default
+        weight: 0.01,  
         rank: 0 
       });
     }
@@ -456,7 +425,7 @@ class HealthService {
     const ranking = this.speedRanking.get(apiId);
 
     if (responseTime === null) {
-      // API com erro/timeout → peso mínimo, rank baixo
+      
       ranking.avgSpeed = 999999;
       ranking.weight = 0.001;  // Quase zero
       ranking.rank = 999;
@@ -464,26 +433,17 @@ class HealthService {
       return;
     }
 
-    // Adiciona nova amostra, mantém janela
+    
     ranking.samples.push(responseTime);
     if (ranking.samples.length > this.rankingWindow) {
       ranking.samples.shift();
     }
 
-    // Calcula média móvel simples
+    
     ranking.avgSpeed = ranking.samples.reduce((a, b) => a + b, 0) / ranking.samples.length;
   }
 
-  /**
-   * Computa pesos para cada API baseado na velocidade
-   * 
-   * Algoritmo:
-   * - APIs rápidas (<2s): peso alto
-   * - APIs médias (2-5s): peso normal
-   * - APIs lentas (>5s): peso reduzido (10x menor)
-   * - APIs muito lentas (>8s): peso muito reduzido (50x menor)
-   * - A soma dos pesos = 1.0 (distribuição probabilística)
-   */
+  
   computeWeights() {
     const entries = [...this.speedRanking.entries()]
       .filter(([_, r]) => r.avgSpeed > 0 && r.avgSpeed < 999999);
@@ -496,15 +456,15 @@ class HealthService {
       return;
     }
 
-    // Ordena por velocidade (mais rápido primeiro)
+    
     entries.sort((a, b) => a[1].avgSpeed - b[1].avgSpeed);
 
     // Atribui ranks
     entries.forEach(([_, r], i) => { r.rank = i + 1; });
 
-    // Calcula pesos usando inverso da velocidade com penalidades
+    
     const totalWeight = entries.reduce((sum, [_, r]) => {
-      const speed = Math.max(r.avgSpeed, 100); // Floor em 100ms
+      const speed = Math.max(r.avgSpeed, 100); 
       
       if (r.avgSpeed > this.slowThreshold) {
         // APIs muito lentas: penalidade 50x
@@ -513,10 +473,10 @@ class HealthService {
         // APIs lentas (>5s): penalidade 10x
         return sum + (100 / speed) * 0.1;
       } else if (r.avgSpeed > 2000) {
-        // APIs médias (>2s): peso normal com leve redução
+        
         return sum + (500 / speed);
       } else {
-        // APIs rápidas (<2s): peso máximo
+        
         return sum + (1000 / speed);
       }
     }, 0);
@@ -528,7 +488,7 @@ class HealthService {
       return;
     }
 
-    // Normaliza pesos para soma = 1.0
+    
     for (const [_, r] of entries) {
       const speed = Math.max(r.avgSpeed, 100);
       
@@ -547,16 +507,12 @@ class HealthService {
     }
   }
 
-  /**
-   * Helper para sleep
-   */
+  
   sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  /**
-   * Retorna o ranking atual de velocidade
-   */
+  
   getSpeedRanking() {
     const result = [];
     for (const [apiId, ranking] of this.speedRanking) {
@@ -572,14 +528,12 @@ class HealthService {
       });
     }
 
-    // Ordena por rank (melhor primeiro)
+    
     result.sort((a, b) => a.rank - b.rank);
     return result;
   }
 
-  /**
-   * Retorna status atual de todas as APIs
-   */
+  
   getStatus() {
     const apis = apiConfig.getAllApis();
     const ranking = this.getSpeedRanking();
@@ -611,25 +565,19 @@ class HealthService {
     };
   }
 
-  /**
-   * Retorna histórico de health checks
-   */
+  
   getHistory(limit = 100) {
     return this.healthHistory.slice(-limit);
   }
 
-  /**
-   * Força um health check + benchmark imediato
-   */
+  
   async forceCheck() {
     await this.checkAll();
     await this.benchmarkAll();
     return this.getStatus();
   }
 
-  /**
-   * Altera intervalo de verificação
-   */
+  
   setInterval(ms) {
     this.checkInterval = ms;
     if (this.intervalId) {

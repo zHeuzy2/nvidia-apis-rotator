@@ -1,12 +1,10 @@
-/**
- * Middleware de tratamento de erros
- */
+
 
 function errorHandler(err, req, res, next) {
   console.error(`[ERROR] ${new Date().toISOString()} - ${err.message}`);
   if (process.env.NODE_ENV !== 'production') console.error(err.stack);
 
-  // Erro de validação
+  
   if (err.name === 'ValidationError') {
     return res.status(400).json({
       id: `err-${Date.now()}`,
@@ -17,7 +15,7 @@ function errorHandler(err, req, res, next) {
     });
   }
 
-  // Erro de autenticação
+  
   if (err.name === 'UnauthorizedError' || err.status === 401) {
     return res.status(401).json({
       id: `err-${Date.now()}`,
@@ -28,7 +26,7 @@ function errorHandler(err, req, res, next) {
     });
   }
 
-  // Erro de rate limit
+  
   if (err.status === 429) {
     return res.status(429).json({
       id: `err-${Date.now()}`,
@@ -39,7 +37,7 @@ function errorHandler(err, req, res, next) {
     });
   }
 
-  // Erro genérico
+  
   const status = err.status || err.statusCode || 500;
   res.status(status).json({
     id: `err-${Date.now()}`,
