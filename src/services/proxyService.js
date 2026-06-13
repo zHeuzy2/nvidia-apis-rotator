@@ -467,7 +467,7 @@ class ProxyService {
 
                 // ============================================
                 // NOTA: NÃO copiamos reasoning → content mais.
-                // O cliente (opencode) já sabe lidar com
+                // O cliente já sabe lidar com
                 // reasoning_content separado do content.
                 // Isso evitava que o content ficasse vazio
                 // para o MiniMax M2.7, mas contaminava o output.

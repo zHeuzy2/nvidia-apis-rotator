@@ -94,12 +94,6 @@ DEFAULT_MODEL=moonshotai/kimi-k2.6
 PROXY_API_KEY=chave-para-clientes
 ```
 
-## Deploy na SquareCloud
-
-1. Crie um arquivo ZIP com todo o projeto (excluindo `.env` e `node_modules`)
-2. Faça upload na SquareCloud
-3. Configure as variáveis de ambiente no painel
-4. Inicie a aplicação
 
 ## Endpoints
 
@@ -112,19 +106,10 @@ PROXY_API_KEY=chave-para-clientes
 | POST | `/v1/embeddings` | Embeddings |
 | GET | `/v1/models` | Lista modelos |
 
-## Uso com OpenCode
-
-Configure o OpenCode para usar seu rotator de API:
-
-```
-Endpoint: https://sua-app.squarecloud.app/v1
-API Key: sua-proxy-key (se configurada)
-```
-
 ## Exemplo de Requisição
 
 ```bash
-curl -X POST https://sua-app.squarecloud.app/v1/chat/completions \
+curl -X POST http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sua-proxy-key" \
   -d '{

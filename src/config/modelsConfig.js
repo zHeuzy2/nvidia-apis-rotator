@@ -13,7 +13,7 @@ const modelsConfig = {
   // Modelo padrão
   defaultModel: process.env.DEFAULT_MODEL || 'moonshotai/kimi-k2.6',
 
-  // System prompts NÃO são mais injetados — o cliente (opencode) gerencia os seus.
+  // System prompts NÃO são mais injetados — o cliente gerencia os seus.
   // Mantido apenas para referência histórica.
   systemPrompts: {},
 
