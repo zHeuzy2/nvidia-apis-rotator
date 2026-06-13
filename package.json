@@ -1,0 +1,38 @@
+{
+  "name": "nvidia-api-rotator",
+  "version": "2.0.0",
+  "description": "Sistema de rotação e balanceamento de APIs NVIDIA NIM com métricas detalhadas",
+  "main": "src/app.js",
+  "scripts": {
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "test": "jest",
+    "benchmark": "node scripts/benchmark.js",
+    "benchmark:full": "node scripts/benchmark.js --streaming --requests=20",
+    "benchmark:local": "node scripts/benchmark.js http://localhost:3000"
+  },
+  "keywords": [
+    "nvidia",
+    "nim",
+    "api",
+    "rotator",
+    "load-balancer",
+    "proxy"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cacheable-lookup": "^7.0.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "undici": "^8.3.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

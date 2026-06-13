@@ -1,0 +1,15 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": "nvidia-rotator",
+  "model": {
+    "default": "moonshotai/kimi-k2.6",
+    "fast": "deepseek-ai/deepseek-v4-pro",
+    "thinking": {
+      "default": "moonshotai/kimi-k2.6"
+    }
+  },
+  "max_tokens": {
+    "default": 8192,
+    "max": 65536
+  }
+}
