@@ -105,6 +105,13 @@ PROXY_API_KEY=key-for-clients
 | POST | `/v1/embeddings` | Embeddings |
 | GET | `/v1/models` | List models |
 
+### System Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/` | Rotator server metadata and configuration status |
+| GET | `/health` | Health status and healthy APIs overview |
+
 ## Example Request
 
 ```bash
