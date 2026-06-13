@@ -1,10 +1,10 @@
 # NVIDIA API Rotator
 
-Sistema de rotação e balanceamento de APIs NVIDIA NIM com métricas detalhadas e otimizações de performance.
+NVIDIA NIM API load balancing and rotation system with detailed metrics and performance optimizations.
 
-## Modelos Suportados
+## Supported Models
 
-| Modelo | Context | Max Output | Thinking | Instant Mode | Vision |
+| Model | Context | Max Output | Thinking | Instant Mode | Vision |
 |--------|---------|------------|----------|--------------|--------|
 | `moonshotai/kimi-k2.6` ⭐ | 256K | 32K | ✅ | ✅ | ✅ |
 | `deepseek-ai/deepseek-v4-pro` | 1M | 64K | ✅ | ✅ | ❌ |
@@ -12,9 +12,9 @@ Sistema de rotação e balanceamento de APIs NVIDIA NIM com métricas detalhadas
 | `minimaxai/minimax-m2.7` | 256K | 128K | ✅ | ❌ | ❌ |
 | `minimaxai/minimax-m3` | 1M | 128K | ✅ | ❌ | ✅ |
 
-### Aliases Disponíveis
+### Available Aliases
 
-| Alias | Modelo Real |
+| Alias | Real Model |
 |-------|-------------|
 | `kimi`, `kimi-k2`, `kimi-k2.5`, `kimi-k2.6` | `moonshotai/kimi-k2.6` |
 | `deepseek`, `deepseek-pro`, `ds-pro`, `deepseek-v4`, `deepseek-v4-pro` | `deepseek-ai/deepseek-v4-pro` |
@@ -23,109 +23,108 @@ Sistema de rotação e balanceamento de APIs NVIDIA NIM com métricas detalhadas
 | `minimax-m3`, `minimax3`, `m3` | `minimaxai/minimax-m3` |
 | `kimi-thinking`, `kimi-instruct` | `moonshotai/kimi-k2.6` |
 
-### Validação Automática
+### Automatic Validation
 
-O rotator valida e ajusta automaticamente os parâmetros:
-- **max_tokens**: limitado ao máximo do modelo
-- **temperature**: ajustado conforme limites do modelo (ex: fixo em 1.0 para thinking)
-- **thinking parameters**: validados conforme o formato suportado pelo modelo
+The rotator automatically validates and normalizes the following parameters:
+- **max_tokens**: capped to the model's maximum limit.
+- **temperature**: adjusted based on model constraints (e.g., fixed at 1.0 for thinking models).
+- **thinking parameters**: validated according to the format supported by each specific model.
 
-Warnings de validação são retornados nos headers da resposta (`X-Validation-Warnings`).
+Validation warnings are returned in response headers (`X-Validation-Warnings`).
 
-## Funcionalidades
+## Features
 
-- **Weighted Rotation**: Distribui requisições entre APIs saudáveis com pesos baseados em velocidade de resposta
-- **Circuit Breaker**: Detecta falhas seguidas e suspende temporariamente chaves com problemas
-- **Failover Automático**: Passa a requisição para a próxima chave saudável em caso de erro de rate limit ou rede
-- **Métricas Detalhadas**: Tracking interno de tokens, tempos de resposta e uso de modelos
-- **Health Check Monitor**: Monitoramento contínuo da integridade e velocidade das APIs
-- **Compatível com OpenAI**: Substitui perfeitamente o endpoint oficial para os modelos suportados
+- **Weighted Rotation**: Distributes requests across healthy APIs with weights based on response speeds.
+- **Circuit Breaker**: Detects consecutive failures and temporarily suspends keys with issues.
+- **Automatic Failover**: Seamlessly routes the request to the next healthy key in case of rate-limiting (429) or network errors.
+- **Detailed Metrics**: Tracks tokens, response times, and model usage internally.
+- **Health Check Monitor**: Continuously monitors the health and latency of the configured APIs.
+- **OpenAI Compatible**: Fully compatible with the official OpenAI API format for all supported models.
 
-## Otimizações de Performance
+## Performance Optimizations
 
-O sistema inclui várias otimizações para reduzir o tempo de resposta e maximizar o throughput:
+The system includes multiple optimizations to minimize response times and maximize throughput:
 
-1. **HTTP Keep-Alive & Connection Pooling**: Reutiliza conexões HTTP com Undici pools otimizados por API.
-2. **Async Logging com Batch Optimizado**: Logs em batch com flush periódico para reduzir overhead de I/O em produção.
-3. **Response Caching**: Cache para endpoints estáticos como `/models` com TTL de 60 segundos.
-4. **Optimized Streaming**: Melhor throughput para respostas com streaming com tratamento inteligente de tool calls e tokens técnicos.
-5. **DNS Cache Optimization**: Resolução DNS mais rápida e otimizada via `cacheable-lookup`.
-6. **Timeout Otimizado**: Reduzido para detecção de falhas e failover rápidos.
-7. **RotatorService Cache**: Cache de APIs saudáveis com TTL curto para evitar verificações desnecessárias de estado.
-8. **Notification Pattern**: Invalidação de cache eficiente quando estado da API muda.
+1. **HTTP Keep-Alive & Connection Pooling**: Reuses HTTP connections with Undici pools optimized per API.
+2. **Async Logging with Batching**: Logs in batches with periodic flushes to minimize I/O overhead in production.
+3. **Response Caching**: Caches static endpoints like `/models` with a 60-second TTL.
+4. **Optimized Streaming**: Enhances throughput for streaming requests with smart handling of tool calls and technical tokens.
+5. **DNS Cache Optimization**: Accelerates name resolution via `cacheable-lookup`.
+6. **Optimized Timeout**: Low latency thresholds to ensure fast failure detection and failover.
+7. **RotatorService Cache**: Caches healthy APIs list with a short TTL to prevent redundant status checks.
+8. **Notification Pattern**: Invalidates API cache immediately when an API state changes.
 
-### Prioridade de Otimização
+### Optimization Priority
 
-As otimizações estão priorizadas para reduzir o tempo de resposta da API NVIDIA:
+Optimizations are prioritized to reduce latency to the NVIDIA API:
 
-- **Alta prioridade**: Connection pooling, timeout otimizado, rotator cache
-- **Média prioridade**: Async logging otimizado, DNS cache
-- **Baixa prioridade**: Documentação e configurações
+- **High Priority**: Connection pooling, optimized timeout, rotator cache.
+- **Medium Priority**: Optimized async logging, DNS cache.
+- **Low Priority**: Documentation and configuration.
 
-## Configuração
+## Configuration
 
-### 1. Copie o arquivo de exemplo
+### 1. Copy the example file
 
 ```bash
 cp .env.example .env
 ```
 
-### 2. Configure suas APIs NVIDIA
+### 2. Configure your NVIDIA APIs
 
-No arquivo `.env`, adicione suas chaves:
+In your `.env` file, add your API keys:
 
 ```env
-NVIDIA_API_KEY_1=nvapi-sua-chave-1
-NVIDIA_API_KEY_2=nvapi-sua-chave-2
-NVIDIA_API_KEY_3=nvapi-sua-chave-3
+NVIDIA_API_KEY_1=nvapi-your-key-1
+NVIDIA_API_KEY_2=nvapi-your-key-2
+NVIDIA_API_KEY_3=nvapi-your-key-3
 ```
 
-### 3. Configure o modelo padrão (opcional)
+### 3. Configure the default model (optional)
 
-Define o modelo usado quando não especificado na requisição:
+Set the default model to use when not specified in the request:
 
 ```env
 DEFAULT_MODEL=moonshotai/kimi-k2.6
 ```
 
-### 4. Configure segurança (opcional)
+### 4. Configure security (optional)
 
 ```env
-PROXY_API_KEY=chave-para-clientes
+PROXY_API_KEY=key-for-clients
 ```
-
 
 ## Endpoints
 
-### Proxy (compatível com OpenAI)
+### Proxy (OpenAI-compatible)
 
-| Método | Endpoint | Descrição |
-|--------|----------|-----------|
+| Method | Endpoint | Description |
+|--------|----------|-------------|
 | POST | `/v1/chat/completions` | Chat completions |
 | POST | `/v1/completions` | Completions |
 | POST | `/v1/embeddings` | Embeddings |
-| GET | `/v1/models` | Lista modelos |
+| GET | `/v1/models` | List models |
 
-## Exemplo de Requisição
+## Example Request
 
 ```bash
 curl -X POST http://localhost:3000/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sua-proxy-key" \
+  -H "Authorization: Bearer your-proxy-key" \
   -d '{
     "model": "moonshotai/kimi-k2.6",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
-## Métricas Disponíveis
+## Available Metrics
 
-- Total de requisições
-- Tokens de entrada/saída
-- Taxa de sucesso
-- Tempo médio de resposta
-- Uso por modelo
+- Total request count
+- Input/output tokens
+- Success rate
+- Average response time
+- Usage per model
 
-## Licença
+## License
 
 MIT
